@@ -99,7 +99,7 @@ typedef struct {
 } ARTIC_R2_Burstmode_Register;
 
 enum ARTIC_R2_Memory {
-	ARTIC_R2_PROGRAM_MEMORY = 0,
+	ARTIC_R2_P_MEMORY = 0,
 	ARTIC_R2_X_MEMORY,
 	ARTIC_R2_Y_MEMORY,
 	ARTIC_R2_IO_MEMORY,
@@ -129,7 +129,7 @@ typedef struct {
 		struct {
 			uint32_t TX_CONFIGURATION : 4;
 			uint32_t RX_CONFIGURATION : 4;
-		};
+		} CONFIGURATION_REGISTER_BITS;
 	};
 } ARGOS_Configuration_Register;
 
@@ -161,12 +161,19 @@ const uint8_t INST_SATELLITE_DETECTION = 0x55; // The ARTIC will start looking f
 const uint8_t CMD_CLEAR_INT_1 = 0x80; // Clear interrupt line 1
 const uint8_t CMD_CLEAR_INT_2 = 0xC0; // Clear interrupt line 2
 
+// P Memory Locations
+const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
+
 // X Memory locations
 const uint16_t MEM_LOC_ARGOS_CONFIGURATION = 0x0384; // Size 1. Read only
 const uint16_t MEM_LOC_RX_PAYLOAD = 0x0200; // Size 9. Read only
 const uint16_t MEM_LOC_RX_FILTERING_CONFIGURATION = 0x0209; // Size 104. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_ENABLE_CRC = 0x0209; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_TRANSPARENT_MODE = 0x020A; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_LUT_LENGTH = 0x020C; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS = 0x020D; // Read/Write
 const uint16_t MEM_LOC_RX_TIMEOUT = 0x0271; // Size 1. Read/Write
-const uint16_t MEM_LOC_DATELLITE_DETECTION_TIMEOUT = 0x272; // Size 1. Read/Write
+const uint16_t MEM_LOC_SATELLITE_DETECTION_TIMEOUT = 0x272; // Size 1. Read/Write
 const uint16_t MEM_LOC_TX_PAYLOAD = 0x273; // Size 220. Write only. == Arribada's "TX_PAYLOAD_ADDRESS"
 const uint16_t MEM_LOC_TX_FREQ_ARGOS_2_3 = 0x034F; // Size 1. Read?Write
 const uint16_t MEM_LOC_TX_FREQ_ARGOS_4 = 0x035F; // Size 1. Read/Write
@@ -188,7 +195,7 @@ typedef struct {
 			uint32_t SELECT_1V3_TO_2V7	: 4; // Vout = 1.3 + 0.1 * reg
 			uint32_t SELECT_1V8					: 1;
 			uint32_t SELECT_3V3					: 1;
-		};
+		} CONTROL_REGISTER_BITS;
 	};
 } TCXO_Control_Register;
 
@@ -207,9 +214,35 @@ public:
 	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin high
 
 	void readStatusRegister(ARTIC_R2_Firmware_Status *status); // Read the ARTIC R2 status register
-	void readConfigurationRegister(ARGOS_Configuration_Register *configuration); // Read the ARGOS configuration register
 	void sendCommandByte(uint8_t command); // Send a single 8-bit command
 	boolean clearInterrupts(uint8_t interrupts = 3); // Clear one or both interrupts. Default to both.
+
+	void readFirmwareVersion(uint8_t *buffer); // Read the firmware version from PMEM
+	void readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *YMEM_CRC); // Read the memories CRCs (after firmware boot)
+
+	void setRxTimeout(uint32_t timeout_secs = 0x0A); // Set the RX timeout (seconds). Default to 10.
+	void setSatelliteDetectionTimeout(uint32_t timeout_secs = 0x02); // Set the satellite detection timeout (seconds). Default to 2.
+	void setTCXOWarmupTime(uint32_t timeout_secs = 0x0A); // Set the TCXO warm up time (seconds). Default to 10.
+	void setTxCertificationInterval(uint32_t timeout_secs = 0x02); // Set the TX certification interval
+
+	void readARGOSconfiguration(ARGOS_Configuration_Register *configuration); // Read the ARGOS configuration register
+	uint32_t readRxTimeout(); // Read the RX timeout
+	uint32_t readSatelliteDetectionTimeout(); // Read the satellite detection timeout
+	uint32_t readTCXOWarmupTime(); // Read the TCXO warm up time
+	uint32_t readTxCertificationInterval(); // Read the TX certification interval
+
+	boolean setTCXOControl(float voltage = 3.3, bool autoDisable = true); // Set the TCXO control voltage and auto-disable. Default to 3.3V and leave enabled.
+	float readTCXOControlVoltage(); // Read the TCXO control voltage. Auto-disable is ignored.
+	boolean readTCXOAutoDisable(); // Read the TCXO control auto-disable bit
+
+	boolean enableRXCRC(); // Enable RX CRC check
+	boolean disableRXCRC(); // Disable RX CRC check
+	boolean enableRXTransparentMode(); // Enable RX transparent mode
+	boolean disableRXTransparentMode(); // Disable RX transparent mode
+	boolean clearAddressLUT(); // Clear the address look-up-table by setting the length to zero
+	boolean addAddressToLUT(uint32_t AddressLSBits, uint32_t AddressMSBits); // Add the specified address to the message filter Look Up Table
+
+	boolean readDownlinkMessage(uint32_t *payloadLength, uint32_t *addresseeIdentification, uint8_t *ADCS, uint8_t *service, uint8_t *rxData, uint16_t *FCS); // Read a downlink message from the RX payload buffer
 
 private:
 	//Variables
@@ -227,9 +260,16 @@ private:
 	uint8_t _gain8 = -1; // Pull this pin high to _disable_ the x8 RF gain
 	uint8_t _gain16 = -1; // Pull this pin high to _disable_ the x16 RF gain
 
+	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
+	// This allows some time for the internal memory access block to retrieve the first data sample.
+	// Default value is 24 * 1/3000000 = 8 microseconds
+	uint32_t _delay24cycles = 8; // Delay for this many microseconds before performing a read
+
 	//Functions
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode);
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords);
+	void write24BitWord(uint32_t word);
+	void writeTwo24BitWords(uint32_t word1, uint32_t word2);
 };
 
 #endif

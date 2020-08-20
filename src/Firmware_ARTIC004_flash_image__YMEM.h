@@ -1,4 +1,5 @@
 const uint32_t ARTIC_R2_YMEM_LEN = 6826;
+const uint32_t ARTIC_R2_YMEM_CHECKSUM = 0x000000;
 const uint32_t ARTIC_R2_YMEM[6826] = {
 	0x000001,
 	0x000001,

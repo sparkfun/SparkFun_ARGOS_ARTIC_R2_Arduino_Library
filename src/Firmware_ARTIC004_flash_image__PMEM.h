@@ -1,4 +1,5 @@
 const uint32_t ARTIC_R2_PMEM_LEN = 10240;
+const uint32_t ARTIC_R2_PMEM_CHECKSUM = 0x000000;
 const uint32_t ARTIC_R2_PMEM[10240] = {
 	0x0d000008,
 	0x0d001b52,
