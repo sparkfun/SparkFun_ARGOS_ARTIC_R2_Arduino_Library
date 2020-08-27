@@ -34,6 +34,7 @@
 ARTIC_R2 myARTIC;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
+// (Change these if required)
 uint8_t CS_Pin = 24;
 uint8_t GAIN8_Pin = 3;
 uint8_t GAIN16_Pin = 4;

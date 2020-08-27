@@ -34,6 +34,7 @@
 ARTIC_R2 myARTIC;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
+// (Change these if required)
 uint8_t CS_Pin = 24;
 uint8_t GAIN8_Pin = 3;
 uint8_t GAIN16_Pin = 4;
@@ -103,7 +104,7 @@ void setup()
     while (1)
       ; // Do nothing more
   }
-  
+
   // Start satellite detection
   // The ARTIC will start looking for a satellite for a specified amount of time.
   // If no satellite is detected, INT 2 will be set with the ‘SATELLITE_TIMEOUT’ flag.
@@ -133,7 +134,7 @@ void setup()
 void loop()
 {
   delay(1000); // Query the ARTIC firmware status once per second
-  
+
   Serial.println();
 
   ARTIC_R2_Firmware_Status status;

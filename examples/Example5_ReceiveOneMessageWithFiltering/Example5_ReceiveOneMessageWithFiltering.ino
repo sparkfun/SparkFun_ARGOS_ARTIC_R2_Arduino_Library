@@ -108,7 +108,7 @@ void setup()
     while (1)
       ; // Do nothing more
   }
-  
+
   // Set the RX mode to ARGOS 4
   myARTIC.setSatelliteDetectionTimeout(CONFIG_CMD_SET_ARGOS_4_RX_MODE);
 
@@ -130,7 +130,7 @@ void setup()
     while (1)
       ; // Do nothing more
   }
-  
+
   // Read and print the ARGOS RX configuration
   myARTIC.readARGOSconfiguration(&configuration);
   if (configuration.CONFIGURATION_REGISTER_BITS.RX_CONFIGURATION == RX_CONFIG_ARGOS_3_RX_MODE) Serial.println(F("RX mode is: ARGOS 3"));
@@ -143,7 +143,7 @@ void setup()
   {
     Serial.println(F("clearAddressLUT failed! Freezing..."));
     while (1)
-      ; // Do nothing more    
+      ; // Do nothing more
   }
 
   // Add our address to the LUT
@@ -153,7 +153,7 @@ void setup()
   {
     Serial.println(F("addAddressToLUT failed! Freezing..."));
     while (1)
-      ; // Do nothing more    
+      ; // Do nothing more
   }
 
   // Disable RX transparent mode so we will only receive messages addressed to us
@@ -162,7 +162,7 @@ void setup()
   {
     Serial.println(F("disableRXTransparentMode failed! Freezing..."));
     while (1)
-      ; // Do nothing more    
+      ; // Do nothing more
   }
 
   // Enable the RX CRC check (even though this is enabled by default)
@@ -170,7 +170,7 @@ void setup()
   {
     Serial.println(F("enableRXCRC failed! Freezing..."));
     while (1)
-      ; // Do nothing more    
+      ; // Do nothing more
   }
 
   // Start the ARTIC in receiving mode for an unlimited time until 1 message has been received.
@@ -200,7 +200,7 @@ void setup()
 void loop()
 {
   delay(1000); // Query the ARTIC firmware status once per second
-  
+
   Serial.println();
 
   boolean messageReceived = false; // Flag to indicate if a message is available for reading
@@ -244,26 +244,20 @@ void loop()
 
   if (messageReceived) // If a message was received, read it.
   {
-     uint32_t payloadLength;
-    uint32_t addresseeIdentification;
-    uint8_t ADCS;
-    uint8_t service;
-    uint8_t rxData[18]; // Maxmimum payload length is 17 bytes (136 bits)
-    uint8_t *rxDataPtr = rxData;
-    uint16_t FCS;
     // Read a downlink message from the RX payload buffer
-    if (myARTIC.readDownlinkMessage(&payloadLength, &addresseeIdentification, &ADCS, &service, rxDataPtr, &FCS))
+    Downlink_Message downlinkMessage;
+    if (myARTIC.readDownlinkMessage(&downlinkMessage))
     {
       Serial.println(F("Message received:"));
-      Serial.printf("Payload length:  %d\n", payloadLength);
-      Serial.printf("Addressee ID:    0x%04X\n", addresseeIdentification);
-      Serial.printf("ADCS:            0x%02X\n", ADCS);
-      Serial.printf("Service:         0x%02X\n", service);
-      Serial.printf("FCS:             0x%04X\n", FCS);
-      Serial.print(F("Payload buffer: 0x"));
+      Serial.printf("Payload length:  %d\n", downlinkMessage.payloadLength);
+      Serial.printf("Addressee ID:    0x%04X\n", downlinkMessage.addresseeIdentification);
+      Serial.printf("ADCS:            0x%02X\n", downlinkMessage.ADCS);
+      Serial.printf("Service:         0x%02X\n", downlinkMessage.service);
+      Serial.printf("FCS:             0x%04X\n", downlinkMessage.FCS);
+      Serial.print(F("Payload buffer:  0x"));
       for (int i = 0; i < 17; i++)
       {
-        Serial.printf("%02X", rxData[i]);
+        Serial.printf("%02X", downlinkMessage.payload[i]);
       }
       Serial.println();
 
@@ -271,10 +265,10 @@ void loop()
 
       // Clear both interrupt flags
       myARTIC.clearInterrupts(3);
-    
+
       // Delay for 10ms
       delay(10);
-    
+
       // Check that the MCU command was accepted
       myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
       if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED) Serial.println(F("MCU command was accepted"));

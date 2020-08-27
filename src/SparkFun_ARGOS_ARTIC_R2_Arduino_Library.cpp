@@ -949,7 +949,7 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t AddressLSBits, uint32_t AddressMSBits
 //     In this way the total Downlink message occupies a number of consecutive 24-bit words in the payload buffer.
 //   o In case the total length of the Downlink message is not a multiple of 24 bits,
 //     the last used 24-bit word of the payload buffer is stuffed by the DSP with 0’s at the LSB locations.
-boolean ARTIC_R2::readDownlinkMessage(uint32_t *payloadLength, uint32_t *addresseeIdentification, uint8_t *ADCS, uint8_t *service, uint8_t *rxData, uint16_t *FCS)
+boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
@@ -981,48 +981,48 @@ boolean ARTIC_R2::readDownlinkMessage(uint32_t *payloadLength, uint32_t *address
 	}
 
 	// Assemble the payload length
-	*payloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+	downlinkMessage->payloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: payloadLength in bit is "));
-		_debugPort->println(*payloadLength);
+		_debugPort->println(downlinkMessage->payloadLength);
 	}
 
 	// Trap zero payload length (hopefully redundant!?)
-	if (*payloadLength == 0)
+	if (downlinkMessage->payloadLength == 0)
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("readDownlinkMessage: zero payloadLength!"));
 		return (false);
 	}
 
-	// Assemble the Addressee Identification
-	*addresseeIdentification = (((uint32_t)buffer[3]) << 20) | (((uint32_t)buffer[4]) << 12) | (((uint32_t)buffer[5]) << 4) | (((uint32_t)buffer[6]) >> 4);
+	// Assemble the Addressee Identification (28 bits)
+	downlinkMessage->addresseeIdentification = (((uint32_t)buffer[3]) << 20) | (((uint32_t)buffer[4]) << 12) | (((uint32_t)buffer[5]) << 4) | (((uint32_t)buffer[6]) >> 4);
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: Addressee Identification is 0x"));
-		_debugPort->println(*addresseeIdentification, HEX);
+		_debugPort->println(downlinkMessage->addresseeIdentification, HEX);
 	}
 
 	// Extract the ADCS
-	*ADCS = buffer[6] & 0x0F;
+	downlinkMessage->ADCS = buffer[6] & 0x0F;
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: ADCS is 0x"));
-		_debugPort->println(*ADCS, HEX);
+		_debugPort->println(downlinkMessage->ADCS, HEX);
 	}
 
 	// Extract the Service
-	*service = buffer[7];
+	downlinkMessage->service = buffer[7];
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: Service is 0x"));
-		_debugPort->println(*service, HEX);
+		_debugPort->println(downlinkMessage->service, HEX);
 	}
 
-	// Calculate the number of full bytes in the message
+	// Calculate the number of whole bytes in the message
 	// TO DO: Check if the payload length does include the 7 bytes for the Addressee ID, ADCS, Service and FCS
-	int numBytes = ((*payloadLength) >> 4) - 7; // Divide by 8 and subtract 7 (for the Addressee ID, ADCS, Service and FCS)
+	int numBytes = ((downlinkMessage->payloadLength) >> 4) - 7; // Divide by 8 and subtract 7 (for the Addressee ID, ADCS, Service and FCS)
 
 	// Copy the full bytes into rxData
 	if (_printDebug == true)
@@ -1031,37 +1031,37 @@ boolean ARTIC_R2::readDownlinkMessage(uint32_t *payloadLength, uint32_t *address
 	}
 	for (int i = 0; i < numBytes; i++)
 	{
-		rxData[i] = buffer[i + 8];
+		downlinkMessage->payload[i] = buffer[i + 8];
 		if (_printDebug == true)
 		{
-			if (rxData[i] < 0x10) _debugPort->print("0");
-			_debugPort->print(rxData[i], HEX);
+			if (downlinkMessage->payload[i] < 0x10) _debugPort->print("0");
+			_debugPort->print(downlinkMessage->payload[i], HEX);
 		}
 	}
 
 	// Add a partial payload byte (if there is one)
 
 	// Calculate the number of extra bits
-	int numExtraBits = ((int)*payloadLength) - ((((int)numBytes) + 7) * 8);
+	int numExtraBits = ((int)downlinkMessage->payloadLength) - ((((int)numBytes) + 7) * 8);
 	// Extract the extra bits. Left-justify them.
 	if (numExtraBits > 0)
 	{
 		// Left-justify the extra bits
-		rxData[numBytes] = (buffer[numBytes + 8] >> (8 - numExtraBits)) << (8 - numExtraBits);
+		downlinkMessage->payload[numBytes] = (buffer[numBytes + 8] >> (8 - numExtraBits)) << (8 - numExtraBits);
 		if (_printDebug == true)
 		{
-			if (rxData[numBytes] < 0x10) _debugPort->print("0");
-			_debugPort->println(rxData[numBytes], HEX);
+			if ((downlinkMessage->payload[numBytes] < 0x10) && (numExtraBits >= 5)) _debugPort->print("0");
+			_debugPort->println(downlinkMessage->payload[numBytes], HEX);
 		}
 		// Extract the FCS bits
-		*FCS = ((uint16_t)(buffer[numBytes + 8] << numExtraBits)) << 8;
-		*FCS = *FCS | (((uint16_t)buffer[numBytes + 9]) << numExtraBits);
-		*FCS = *FCS | (((uint16_t)buffer[numBytes + 10]) >> (8 - numExtraBits));
+		downlinkMessage->FCS = ((uint16_t)(buffer[numBytes + 8] << numExtraBits)) << 8;
+		downlinkMessage->FCS = downlinkMessage->FCS | (((uint16_t)buffer[numBytes + 9]) << numExtraBits);
+		downlinkMessage->FCS = downlinkMessage->FCS | (((uint16_t)buffer[numBytes + 10]) >> (8 - numExtraBits));
 	}
 	else
 	{
 		// There are no extra bits so FCS is byte-aligned
-		*FCS = (((uint16_t)buffer[numBytes + 9]) << 8) | ((uint16_t)buffer[numBytes + 10]);
+		downlinkMessage->FCS = (((uint16_t)buffer[numBytes + 9]) << 8) | ((uint16_t)buffer[numBytes + 10]);
 		if (_printDebug == true)
 		{
 			_debugPort->println(); // Tidy up debug printing
@@ -1070,7 +1070,7 @@ boolean ARTIC_R2::readDownlinkMessage(uint32_t *payloadLength, uint32_t *address
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: FCS is 0x"));
-		_debugPort->println(*FCS, HEX);
+		_debugPort->println(downlinkMessage->FCS, HEX);
 	}
 
 	return (true);

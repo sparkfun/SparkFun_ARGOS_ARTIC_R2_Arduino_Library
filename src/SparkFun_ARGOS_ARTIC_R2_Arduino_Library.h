@@ -199,6 +199,16 @@ typedef struct {
 	};
 } TCXO_Control_Register;
 
+// Downlink Message - as defined by ARGOS standard A4-SYS-IF-0086-CNES
+typedef struct {
+	uint32_t payloadLength;
+	uint32_t addresseeIdentification;
+	uint8_t ADCS;
+	uint8_t service;
+	uint8_t payload[17]; // Maxmimum payload length is 17 bytes (136 bits)
+	uint16_t FCS;
+} Downlink_Message;
+
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 class ARTIC_R2
@@ -242,7 +252,7 @@ public:
 	boolean clearAddressLUT(); // Clear the address look-up-table by setting the length to zero
 	boolean addAddressToLUT(uint32_t AddressLSBits, uint32_t AddressMSBits); // Add the specified address to the message filter Look Up Table
 
-	boolean readDownlinkMessage(uint32_t *payloadLength, uint32_t *addresseeIdentification, uint8_t *ADCS, uint8_t *service, uint8_t *rxData, uint16_t *FCS); // Read a downlink message from the RX payload buffer
+	boolean readDownlinkMessage(Downlink_Message *downlinkMessage); // Read a downlink message from the RX payload buffer
 
 private:
 	//Variables
