@@ -37,8 +37,6 @@ with open("ARTIC.flash", "r") as reader:
             XMEM.write(line[0:2])
             line = reader.readline()
             XMEM.write(line[0:2])
-            line = reader.readline()
-            XMEM.write(line[0:2])
             if (x < 21844):
                 XMEM.write(",")
             XMEM.write("\n")
@@ -49,8 +47,6 @@ with open("ARTIC.flash", "r") as reader:
         YMEM.write("const uint32_t ARTIC_R2_YMEM[6826] = {\n")
         for x in range(6826):
             YMEM.write("\t0x")
-            line = reader.readline()
-            YMEM.write(line[0:2])
             line = reader.readline()
             YMEM.write(line[0:2])
             line = reader.readline()
