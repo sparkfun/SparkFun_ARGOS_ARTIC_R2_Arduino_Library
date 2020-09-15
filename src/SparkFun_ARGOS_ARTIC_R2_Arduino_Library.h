@@ -18,7 +18,7 @@
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 	See the LICENSE.md for more details.
 
-	Parts of this library have been remixed from the Arribada Horizon bio-logging platform:
+	Parts of this library were inspired by the Arribada Horizon bio-logging platform:
 	https://github.com/arribada/horizon
 	Arribada's work is gratefully acknowledged.
 
@@ -34,8 +34,6 @@
 #define ARTIC_R2_FLASH_BOOT_TIMEOUT 2500 // ARTIC should boot in 2.25 secs. Timeout after 2500ms.
 #define ARTIC_R2_BOOT_TIMEOUT 500 // ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
 
-//#include "ARTIC.h" // Include Arribada's ARTIC header file
-
 #define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
 
 #ifdef ARTIC_R2_UPLOAD_FIRMWARE
@@ -43,9 +41,9 @@
 // P 32-bit 10240 DSP Program memory
 // X 24-bit 21845 DSP X memory
 // Y 24-bit 6826 DSP Y memory
-#include "Firmware_ARTIC004_flash_image__PMEM.h"
-#include "Firmware_ARTIC004_flash_image__XMEM.h"
-#include "Firmware_ARTIC004_flash_image__YMEM.h"
+#include "Firmware_ARTIC006_flash_image__PMEM.h"
+#include "Firmware_ARTIC006_flash_image__XMEM.h"
+#include "Firmware_ARTIC006_flash_image__YMEM.h"
 #endif
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -111,7 +109,7 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 };
 
 // MCU Configuration Commands
-const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01;
+//const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006 ?!
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_MODE = 0x02;
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_BACKUP_MODE = 0x03;
 const uint8_t CONFIG_CMD_SET_PTT_A2_TX_MODE = 0x04;
@@ -165,25 +163,26 @@ const uint8_t CMD_CLEAR_INT_2 = 0xC0; // Clear interrupt line 2
 const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
 
 // X Memory locations
-const uint16_t MEM_LOC_ARGOS_CONFIGURATION = 0x0384; // Size 1. Read only
-const uint16_t MEM_LOC_RX_PAYLOAD = 0x0200; // Size 9. Read only
-const uint16_t MEM_LOC_RX_FILTERING_CONFIGURATION = 0x0209; // Size 104. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_ENABLE_CRC = 0x0209; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_TRANSPARENT_MODE = 0x020A; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_LUT_LENGTH = 0x020C; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS = 0x020D; // Read/Write
-const uint16_t MEM_LOC_RX_TIMEOUT = 0x0271; // Size 1. Read/Write
-const uint16_t MEM_LOC_SATELLITE_DETECTION_TIMEOUT = 0x272; // Size 1. Read/Write
-const uint16_t MEM_LOC_TX_PAYLOAD = 0x273; // Size 220. Write only. == Arribada's "TX_PAYLOAD_ADDRESS"
-const uint16_t MEM_LOC_TX_FREQ_ARGOS_2_3 = 0x034F; // Size 1. Read?Write
-const uint16_t MEM_LOC_TX_FREQ_ARGOS_4 = 0x035F; // Size 1. Read/Write
-const uint16_t MEM_LOC_TCXO_WARMUP_TIME = 0x036F; // Sizde 1. Read/Write
-const uint16_t MEM_LOC_TCXO_CONTROL = 0x0370; // Size 1. Read/Write
-const uint16_t MEM_LOC_CRC_RESULTS = 0x0371; // Size 3. Read only. == Arribada's "CRC_ADDRESS"
-const uint16_t MEM_LOC_TX_CERTIFICATION_INTERVAL = 0x0379; // Size 1. Read/Write
+const uint16_t MEM_LOC_ARGOS_CONFIGURATION = 0x137E; // Size 1. Read only (Was 0x0384 in ARTIC004)
+const uint16_t MEM_LOC_RX_PAYLOAD = 0x1204; // Size 9. Read only (Was 0x0200 in ARTIC004)
+const uint16_t MEM_LOC_RX_FILTERING_CONFIGURATION = 0x120D; // Size 104. Read/Write (Was 0x0209 in ARTIC004)
+const uint16_t MEM_LOC_RX_FILTERING_ENABLE_CRC = 0x120D; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_TRANSPARENT_MODE = 0x120E; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_LUT_LENGTH = 0x120F; // Size 1. Read/Write
+const uint16_t MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS = 0x1210; // Read/Write
+const uint16_t MEM_LOC_RX_TIMEOUT = 0x1275; // Size 1. Read/Write (Was 0x0271 in ARTIC004)
+const uint16_t MEM_LOC_SATELLITE_DETECTION_TIMEOUT = 0x1276; // Size 1. Read/Write (Was 0x0272 in ARTIC004)
+const uint16_t MEM_LOC_TX_PAYLOAD = 0x1277; // Size 220. Write only.  (Was 0x0273 in ARTIC004)
+const uint16_t MEM_LOC_TX_FREQ_ARGOS_2_3 = 0x1353; // Size 1. Read/Write (Was 0x034F in ARTIC004)
+const uint16_t MEM_LOC_TX_FREQ_ARGOS_4 = 0x1363; // Size 1. Read/Write (Was 0x035F in ARTIC004)
+const uint16_t MEM_LOC_TCXO_WARMUP_TIME = 0x1373; // Sizde 1. Read/Write (Was 0x036F in ARTIC004)
+const uint16_t MEM_LOC_TCXO_CONTROL = 0x1374; // Size 1. Read/Write (Was 0x0370 in ARTIC004)
+const uint16_t MEM_LOC_CRC_RESULTS = 0x1375; // Size 3. Read only.  (Was 0x0371 in ARTIC004)
+const uint16_t MEM_LOC_TX_CERTIFICATION_INTERVAL = 0x137D; // Size 1. Read/Write (Was 0x0379 in ARTIC004)
+const uint16_t MEM_LOC_FLASH_PROG_BUFFER = 0x137F; // Flash Programming Buffer (New in ARTIC006)
 
 // IO Memory locations
-const uint16_t MEM_LOC_FIRMWARE_STATUS_REGISTER = 0x8018; // == Arribada's "INTERRUPT_ADDRESS"
+const uint16_t MEM_LOC_FIRMWARE_STATUS_REGISTER = 0x8018;
 
 // TCXO Control
 typedef struct {

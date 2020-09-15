@@ -105,8 +105,8 @@ void setup()
       ; // Do nothing more
   }
 
-  // Set the RX mode to ARGOS 4
-  myARTIC.setSatelliteDetectionTimeout(CONFIG_CMD_SET_ARGOS_4_RX_MODE);
+  // Set the RX mode to ARGOS 3
+  myARTIC.setSatelliteDetectionTimeout(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
 
   // Delay for 10ms
   delay(10);

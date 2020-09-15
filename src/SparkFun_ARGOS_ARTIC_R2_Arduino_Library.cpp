@@ -18,7 +18,7 @@
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 	See the LICENSE.md for more details.
 
-	Parts of this library have been remixed from the Arribada Horizon bio-logging platform:
+	Parts of this library were inspired by the Arribada Horizon bio-logging platform:
 	https://github.com/arribada/horizon
 	Arribada's work is gratefully acknowledged.
 
