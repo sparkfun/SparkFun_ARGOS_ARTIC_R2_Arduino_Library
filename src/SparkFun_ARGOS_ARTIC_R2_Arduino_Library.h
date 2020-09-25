@@ -55,12 +55,12 @@ typedef struct {
 		struct {
 			// Current Firmware state
 			uint32_t IDLE								: 1; // The firmware is idle and ready to accept commands
-			uint32_t RX_IN_PROGRESS			: 1; // The firmeware is receiving
+			uint32_t RX_IN_PROGRESS			: 1; // The firmware is receiving
 			uint32_t TX_IN_PROGRESS			: 1; // The firmware is transmitting
 			uint32_t BUSY								: 1; // The firmware is changing state
 			// Interrupt 1 flags
 			uint32_t RX_VALID_MESSAGE					: 1; // A message has been received
-			uint32_t RX_SATELLITE_DETECTED		: 1; // A saellite has been detected
+			uint32_t RX_SATELLITE_DETECTED		: 1; // A satellite has been detected
 			uint32_t TX_FINISHED							: 1; // The transmission was completed
 			uint32_t MCU_COMMAND_ACCEPTED			: 1; // The configuration command has been accepted
 			uint32_t CRC_CALCULATED						: 1; // CRC calculation has finished
@@ -120,6 +120,14 @@ const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_HD_TX_MODE = 0x08;
 const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_MD_TX_MODE = 0x09;
 const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE = 0x0A;
 
+// MCU Configuration Command Results
+typedef enum {
+	ARTIC_R2_MCU_CONFIG_COMMAND_ACCEPTED = 0x00, // The configuration command has been accepted
+	ARTIC_R2_MCU_CONFIG_COMMAND_REJECTED, // Incorrect command sent or firmware is not in idle
+	ARTIC_R2_MCU_CONFIG_COMMAND_OVERFLOW, // Previous command was not yet processed
+	ARTIC_R2_MCU_CONFIG_COMMAND_UNCERTAIN, // Command uncertain?
+} ARTIC_R2_MCU_Config_Command_Result;
+
 // Configuration register (read only)
 typedef struct {
 	union {
@@ -154,6 +162,11 @@ const uint8_t INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE = 0x48; // The ARTIC will tr
 const uint8_t INST_TRANSMIT_ONE_PACKAGE_AND_START_RX = 0x49; // The ARTIC will transmit the payload message according to the configured ARGOS mode and will switch to reception mode as described in ‘Start reception for fixed time’.
 const uint8_t INST_GO_TO_IDLE = 0x50; // The ARTIC will return to idle mode. This command will not have an effect whenever the ARTIC is in ‘BUSY’ state. Once the ARTIC has returned to the idle state, interrupt 1 will be raised and the IDLE_STATE flag will be set.
 const uint8_t INST_SATELLITE_DETECTION = 0x55; // The ARTIC will start looking for a satellite for a specified amount of time. If no satellite is detected, INT 2 will be set with the ‘SATELLITE_TIMEOUT’ flag. If a satellite was detected, by receiving 5 consecutive 0x7E flags, INT 1 will be set with the ‘RX_SATELLITE_DETECTED’ flag.
+
+// MCU Instruction Results
+typedef enum {
+	ARTIC_R2_MCU_INSTRUCTION_ACCEPTED = 0x00, // Instruction was accepted
+} ARTIC_R2_MCU_Instruction_Result;
 
 // MCU Housekeeping: command words
 const uint8_t CMD_CLEAR_INT_1 = 0x80; // Clear interrupt line 1
@@ -223,18 +236,30 @@ public:
 	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin high
 
 	void readStatusRegister(ARTIC_R2_Firmware_Status *status); // Read the ARTIC R2 status register
-	void sendCommandByte(uint8_t command); // Send a single 8-bit command
+
+	void printFirmwareStatus(ARTIC_R2_Firmware_Status status, Stream &port = Serial); // Pretty-print the firmware status
+
+	ARTIC_R2_MCU_Config_Command_Result sendConfigurationCommand(uint8_t command); // Send a single 8-bit configuration command
+	void printConfigCommandResult(ARTIC_R2_MCU_Config_Command_Result result, Stream &port = Serial); // Pretty-print the config command result
+
+	ARTIC_R2_MCU_Instruction_Result sendMCUinstruction(uint8_t instruction); // Send a single 8-bit MCU instruction
+
 	boolean clearInterrupts(uint8_t interrupts = 3); // Clear one or both interrupts. Default to both.
 
 	void readFirmwareVersion(uint8_t *buffer); // Read the firmware version from PMEM
 	void readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *YMEM_CRC); // Read the memories CRCs (after firmware boot)
 
-	void setRxTimeout(uint32_t timeout_secs = 0x0A); // Set the RX timeout (seconds). Default to 10.
-	void setSatelliteDetectionTimeout(uint32_t timeout_secs = 0x02); // Set the satellite detection timeout (seconds). Default to 2.
-	void setTCXOWarmupTime(uint32_t timeout_secs = 0x0A); // Set the TCXO warm up time (seconds). Default to 10.
-	void setTxCertificationInterval(uint32_t timeout_secs = 0x02); // Set the TX certification interval
+	boolean setRxTimeout(uint32_t timeout_secs = 0x0A); // Set the RX timeout (seconds). Default to 10.
+	boolean setSatelliteDetectionTimeout(uint32_t timeout_secs = 0x02); // Set the satellite detection timeout (seconds). Default to 2.
+	boolean setTCXOWarmupTime(uint32_t timeout_secs = 0x0A); // Set the TCXO warm up time (seconds). Default to 10.
+	boolean setTxCertificationInterval(uint32_t timeout_secs = 0x02); // Set the TX certification interval
 
 	void readARGOSconfiguration(ARGOS_Configuration_Register *configuration); // Read the ARGOS configuration register
+
+	void printARGOSconfiguration(ARGOS_Configuration_Register configuration, Stream &port = Serial); // Pretty-print the ARGOS configuration
+	const char *txConfigurationString(ARGOS_Configuration_Register configuration); // Returns a human-readable version of the ARGOS TX configuration
+	const char *rxConfigurationString(ARGOS_Configuration_Register configuration); // Returns a human-readable version of the ARGOS RX configuration
+
 	uint32_t readRxTimeout(); // Read the RX timeout
 	uint32_t readSatelliteDetectionTimeout(); // Read the satellite detection timeout
 	uint32_t readTCXOWarmupTime(); // Read the TCXO warm up time
