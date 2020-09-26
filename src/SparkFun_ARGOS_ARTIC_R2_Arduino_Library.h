@@ -109,7 +109,7 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 };
 
 // MCU Configuration Commands
-//const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006 ?!
+//const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006 ?! TO DO: Check this!
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_MODE = 0x02;
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_BACKUP_MODE = 0x03;
 const uint8_t CONFIG_CMD_SET_PTT_A2_TX_MODE = 0x04;
@@ -120,13 +120,15 @@ const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_HD_TX_MODE = 0x08;
 const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_MD_TX_MODE = 0x09;
 const uint8_t CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE = 0x0A;
 
-// MCU Configuration Command Results
+// MCU Command Results
 typedef enum {
-	ARTIC_R2_MCU_CONFIG_COMMAND_ACCEPTED = 0x00, // The configuration command has been accepted
-	ARTIC_R2_MCU_CONFIG_COMMAND_REJECTED, // Incorrect command sent or firmware is not in idle
-	ARTIC_R2_MCU_CONFIG_COMMAND_OVERFLOW, // Previous command was not yet processed
-	ARTIC_R2_MCU_CONFIG_COMMAND_UNCERTAIN, // Command uncertain?
-} ARTIC_R2_MCU_Config_Command_Result;
+	ARTIC_R2_MCU_COMMAND_ACCEPTED = 0x00, // The configuration command / instruction has been accepted
+	ARTIC_R2_MCU_COMMAND_REJECTED, // Incorrect command / instruction sent or firmware is not in idle
+	ARTIC_R2_MCU_COMMAND_OVERFLOW, // Previous command / instruction was not yet processed
+	ARTIC_R2_MCU_COMMAND_UNCERTAIN, // Command / instruction uncertain? (The MCU did not raise ACCEPTED, REJECTED or OVERFLOW)
+	ARTIC_R2_MCU_COMMAND_INVALID, // The configuration command / instruction was invalid
+	ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS, // sendMCUinstruction will return this if an instruction is already in progress
+} ARTIC_R2_MCU_Command_Result;
 
 // Configuration register (read only)
 typedef struct {
@@ -163,10 +165,48 @@ const uint8_t INST_TRANSMIT_ONE_PACKAGE_AND_START_RX = 0x49; // The ARTIC will t
 const uint8_t INST_GO_TO_IDLE = 0x50; // The ARTIC will return to idle mode. This command will not have an effect whenever the ARTIC is in ‘BUSY’ state. Once the ARTIC has returned to the idle state, interrupt 1 will be raised and the IDLE_STATE flag will be set.
 const uint8_t INST_SATELLITE_DETECTION = 0x55; // The ARTIC will start looking for a satellite for a specified amount of time. If no satellite is detected, INT 2 will be set with the ‘SATELLITE_TIMEOUT’ flag. If a satellite was detected, by receiving 5 consecutive 0x7E flags, INT 1 will be set with the ‘RX_SATELLITE_DETECTED’ flag.
 
-// MCU Instruction Results
+// MCU Instruction Progress
+// The enum numbering indicates priority, higher enums are higher priority
 typedef enum {
-	ARTIC_R2_MCU_INSTRUCTION_ACCEPTED = 0x00, // Instruction was accepted
-} ARTIC_R2_MCU_Instruction_Result;
+	ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS = 0x00,
+	ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION,
+	ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_BUFFER_OVERFLOW,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_BUFFER_OVERFLOW,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_BUFFER_OVERFLOW,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_IDLE_STATE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_FINISHED,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_INVALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_FINISHED,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_INVALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_BUFFER_OVERFLOW,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_VALID_MESSAGE,
+	ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_BUFFER_OVERFLOW,
+	ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE,
+	ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE_IDLE_STATE,
+	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION,
+	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT,
+	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED,
+	ARTIC_R2_MCU_PROGRESS_UNKNOWN_INSTRUCTION,
+} ARTIC_R2_MCU_Instruction_Progress;
 
 // MCU Housekeeping: command words
 const uint8_t CMD_CLEAR_INT_1 = 0x80; // Clear interrupt line 1
@@ -230,7 +270,7 @@ public:
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
-	boolean setTXgain(int gain = 24); // Set the TX gain (valid valyes are 0,8,16,24)
+	boolean setTXgain(int gain = 24); // Set the TX gain (valid values are 0,8,16,24)
 
 	void enableARTICpower(); // Enable power for the ARTIC R2 by pulling the power enable pin low
 	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin high
@@ -239,10 +279,12 @@ public:
 
 	void printFirmwareStatus(ARTIC_R2_Firmware_Status status, Stream &port = Serial); // Pretty-print the firmware status
 
-	ARTIC_R2_MCU_Config_Command_Result sendConfigurationCommand(uint8_t command); // Send a single 8-bit configuration command
-	void printConfigCommandResult(ARTIC_R2_MCU_Config_Command_Result result, Stream &port = Serial); // Pretty-print the config command result
+	ARTIC_R2_MCU_Command_Result sendConfigurationCommand(uint8_t command); // Send a single 8-bit configuration command
+	ARTIC_R2_MCU_Command_Result sendMCUinstruction(uint8_t instruction); // Send a single 8-bit MCU instruction
+	void printCommandResult(ARTIC_R2_MCU_Command_Result result, Stream &port = Serial); // Pretty-print the command result
 
-	ARTIC_R2_MCU_Instruction_Result sendMCUinstruction(uint8_t instruction); // Send a single 8-bit MCU instruction
+	boolean checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress *progress); // Check the MCU instruction progress. Returns true if the instruction is complete.
+	void printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progress, Stream &port = Serial); // Pretty-print the MCU instruction progress
 
 	boolean clearInterrupts(uint8_t interrupts = 3); // Clear one or both interrupts. Default to both.
 
@@ -298,6 +340,11 @@ private:
 	// This allows some time for the internal memory access block to retrieve the first data sample.
 	// Default value is 24 * 1/3000000 = 8 microseconds
 	uint32_t _delay24cycles = 8; // Delay for this many microseconds before performing a read
+
+	// Use instructionInProgress to keep track of which instruction is currently in progress.
+	// instructionInProgress will be 0 when the ARTIC is idle.
+	// It will be set to one of the INST_ states by sendMCUinstruction.
+	uint8_t _instructionInProgress = 0;
 
 	//Functions
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode);

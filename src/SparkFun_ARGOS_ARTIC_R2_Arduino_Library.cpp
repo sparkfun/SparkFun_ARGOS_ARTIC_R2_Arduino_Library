@@ -473,8 +473,21 @@ void ARTIC_R2::configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode)
 // Send an MCU Configuration Command
 // Write a single 8-bit configuration command
 // Return the result
-ARTIC_R2_MCU_Config_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t command)
+ARTIC_R2_MCU_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t command)
 {
+	// Check that the command is valid
+	if((command != CONFIG_CMD_SET_ARGOS_3_RX_MODE) &&
+		(command != CONFIG_CMD_SET_ARGOS_3_RX_BACKUP_MODE) &&
+		//(command != CONFIG_CMD_SET_ARGOS_4_RX_MODE) &&  // Unsupported by ARTIC006 ?! TO DO: Check this!
+		(command != CONFIG_CMD_SET_PTT_A2_TX_MODE) &&
+		(command != CONFIG_CMD_SET_PTT_A3_TX_MODE) &&
+		(command != CONFIG_CMD_SET_PTT_ZE_TX_MODE) &&
+		(command != CONFIG_CMD_SET_ARGOS_3_PTT_HD_TX_MODE) &&
+		(command != CONFIG_CMD_SET_ARGOS_4_PTT_HD_TX_MODE) &&
+		(command != CONFIG_CMD_SET_ARGOS_4_PTT_MD_TX_MODE) &&
+		(command != CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE))
+		return ARTIC_R2_MCU_COMMAND_INVALID; // Command is invalid
+
 	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
 
 	if (_printDebug == true)
@@ -501,41 +514,66 @@ ARTIC_R2_MCU_Config_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t co
 
 	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED)
 	{
-		return ARTIC_R2_MCU_CONFIG_COMMAND_ACCEPTED;
+		return ARTIC_R2_MCU_COMMAND_ACCEPTED;
 	}
 	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
 	{
-		return ARTIC_R2_MCU_CONFIG_COMMAND_REJECTED;
+		return ARTIC_R2_MCU_COMMAND_REJECTED;
 	}
 	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
 	{
-		return ARTIC_R2_MCU_CONFIG_COMMAND_OVERFLOW;
+		return ARTIC_R2_MCU_COMMAND_OVERFLOW;
 	}
 	else
 	{
-		return ARTIC_R2_MCU_CONFIG_COMMAND_UNCERTAIN; // Hopefully this is impossible?
+		return ARTIC_R2_MCU_COMMAND_UNCERTAIN; // Hopefully this is impossible?
 	}
 }
 
-// Pretty-print the config command result
-void ARTIC_R2::printConfigCommandResult(ARTIC_R2_MCU_Config_Command_Result result, Stream &port)
+// Pretty-print the command result
+void ARTIC_R2::printCommandResult(ARTIC_R2_MCU_Command_Result result, Stream &port)
 {
 	switch (result)
 	{
-		case ARTIC_R2_MCU_CONFIG_COMMAND_ACCEPTED:
-			port.println(F("MCU configuration command result: success. The configuration command has been accepted."));
+		case ARTIC_R2_MCU_COMMAND_ACCEPTED:
+			port.println(F("MCU command result: success. The configuration command has been accepted."));
 			break;
-		case ARTIC_R2_MCU_CONFIG_COMMAND_REJECTED:
-			port.println(F("MCU configuration command result: fail! Incorrect command sent or firmware is not in idle."));
+		case ARTIC_R2_MCU_COMMAND_REJECTED:
+			port.println(F("MCU command result: fail! Incorrect command sent or firmware is not in idle."));
 			break;
-		case ARTIC_R2_MCU_CONFIG_COMMAND_OVERFLOW:
-			port.println(F("MCU configuration command result: fail! Previous command was not yet processed."));
+		case ARTIC_R2_MCU_COMMAND_OVERFLOW:
+			port.println(F("MCU command result: fail! Previous command was not yet processed."));
 			break;
-		case ARTIC_R2_MCU_CONFIG_COMMAND_UNCERTAIN:
-			port.println(F("MCU configuration command result: UNCERTAIN!"));
+		case ARTIC_R2_MCU_COMMAND_UNCERTAIN:
+			port.println(F("MCU command result: UNCERTAIN! (MCU did not raise ACCEPTED, REJECTED or OVERFLOW)"));
+			break;
+		case ARTIC_R2_MCU_COMMAND_INVALID:
+			port.println(F("MCU command result: INVALID! (MCU command was invalid / not recognized)"));
+			break;
+		case ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS:
+			port.print(F("MCU command result: fail! "));
+			if (_instructionInProgress == INST_START_CONTINUOUS_RECEPTION)
+				port.println(F("Continuous reception is in progress. Use INST_GO_TO_IDLE to cancel."));
+			else if (_instructionInProgress == INST_START_RECEIVING_1_MESSAGE)
+				port.println(F("MCU is receiving one message. Use INST_GO_TO_IDLE to cancel."));
+			else if (_instructionInProgress == INST_START_RECEIVING_2_MESSAGES)
+				port.println(F("MCU is receiving two messages. Use INST_GO_TO_IDLE to cancel."));
+			else if (_instructionInProgress == INST_START_RECEPTION_FOR_FIXED_TIME)
+				port.println(F("MCU is receiving for a fixed time. Use INST_GO_TO_IDLE to cancel."));
+			else if (_instructionInProgress == INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE)
+				port.println(F("MCU is transmitting one packet. It will go idle when transmission is complete."));
+			else if (_instructionInProgress == INST_TRANSMIT_ONE_PACKAGE_AND_START_RX)
+				port.println(F("MCU is transmitting one packet. It will start reception for a fixed time when transmission is complete."));
+			else if (_instructionInProgress == INST_GO_TO_IDLE)
+				port.println(F("MCU is attempting to go to idle."));
+			else if (_instructionInProgress == INST_SATELLITE_DETECTION)
+				// TO DO: check if it is possible to GO_TO_IDLE during satellite detection
+				port.println(F("MCU is attempting to detect a satellite for the specified amount of time."));
+			else
+				port.println(F("I don't know what the MCU is doing. This should be impossible!"));
 			break;
 		default:
-			port.println(F("MCU configuration command result: UNKNOWN RESULT!")); // This should be impossible?
+			port.println(F("MCU command result: UNKNOWN RESULT! This should be impossible!")); // This should be impossible?
 			break;
 		}
 }
@@ -543,9 +581,37 @@ void ARTIC_R2::printConfigCommandResult(ARTIC_R2_MCU_Config_Command_Result resul
 // Send an MCU Instruction
 // Write a single 8-bit instruction
 // Return the result
-ARTIC_R2_MCU_Instruction_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction)
+ARTIC_R2_MCU_Command_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction)
 {
-	ARTIC_R2_MCU_Instruction_Result result = ARTIC_R2_MCU_INSTRUCTION_ACCEPTED;
+	// Check that the instruction is valid
+	if((instruction != INST_START_CONTINUOUS_RECEPTION) &&
+		(instruction != INST_START_RECEIVING_1_MESSAGE) &&
+		(instruction != INST_START_RECEIVING_2_MESSAGES) &&
+		(instruction != INST_START_RECEPTION_FOR_FIXED_TIME) &&
+		(instruction != INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) &&
+		(instruction != INST_TRANSMIT_ONE_PACKAGE_AND_START_RX) &&
+		(instruction != INST_GO_TO_IDLE) &&
+		(instruction != INST_SATELLITE_DETECTION))
+		return ARTIC_R2_MCU_COMMAND_INVALID; // Instruction is invalid
+
+	// Check if this is not a INST_GO_TO_IDLE instruction
+	if (instruction != INST_GO_TO_IDLE)
+	{
+		// Check that there is not already an instruction in progress
+		if (_instructionInProgress > 0)
+			return ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS; // Abort - an instruction is already in progress
+	}
+
+	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
+
+	if (_printDebug == true)
+	{
+		readStatusRegister(&status);
+		if (!status.STATUS_REGISTER_BITS.IDLE) // If the firmware is not idle
+		{
+			_debugPort->println(F("sendMCUinstruction: ARTIC is not idle. This will probably fail."));
+		}
+	}
 
 	// Write 8 bits to SPI:
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
@@ -556,7 +622,395 @@ ARTIC_R2_MCU_Instruction_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	return result;
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles *** TO DO: Check if this needs to be extended! ***
+
+	readStatusRegister(&status); // Read the status register again
+
+	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED)
+	{
+		_instructionInProgress = instruction; // Update _instructionInProgress
+		return ARTIC_R2_MCU_COMMAND_ACCEPTED;
+	}
+	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
+	{
+		// Leave _instructionInProgress unmodified?
+		return ARTIC_R2_MCU_COMMAND_REJECTED;
+	}
+	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
+	{
+		// Leave _instructionInProgress unmodified?
+		return ARTIC_R2_MCU_COMMAND_OVERFLOW;
+	}
+	else
+	{
+		// Leave _instructionInProgress unmodified?
+		return ARTIC_R2_MCU_COMMAND_UNCERTAIN; // Hopefully this is impossible?
+	}
+}
+
+// Check the MCU instruction progress. Return true if the instruction is complete.
+boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress *progress)
+{
+	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
+	readStatusRegister(&status);
+
+	switch (_instructionInProgress)
+	{
+		case 0: // If there is no instruction in progress
+			*progress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS;
+			return true; // Return true as instruction is complete - even though none was in progress?
+			break;
+		case INST_START_CONTINUOUS_RECEPTION:
+			if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) // RX_BUFFER_OVERFLOW takes priority over RX_VALID_MESSAGE
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_BUFFER_OVERFLOW;
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE)
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_VALID_MESSAGE;
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED)
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_SATELLITE_DETECTED;
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION;
+			}
+			return false; // Continuous reception is never complete. It has to be stopped by GO_TO_IDLE.
+			break;
+		case INST_START_RECEIVING_1_MESSAGE:
+			if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // IDLE will also be set
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE;
+				return true; // Rx is complete
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED)
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_SATELLITE_DETECTED;
+				return false; // Rx is still in progress
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE;
+				return false; // Rx is still in progress
+			}
+			break;
+		case INST_START_RECEIVING_2_MESSAGES:
+			if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // If one or two messages have been received
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_VALID_MESSAGE;
+				if (status.STATUS_REGISTER_BITS.IDLE) // If MCU is idle then two messages have been received
+				{
+					return true; // Rx is complete - both messages received
+				}
+				else
+				{
+					return false; // Rx is still in progress - only one message received
+				}
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED)
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_SATELLITE_DETECTED;
+				return false; // Rx is still in progress
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES;
+				return false; // Rx is still in progress
+			}
+			break;
+		case INST_START_RECEPTION_FOR_FIXED_TIME:
+			if (status.STATUS_REGISTER_BITS.RX_TIMEOUT) // If Rx has timed out
+			{
+				if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) // If the buffer has overflowed
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_BUFFER_OVERFLOW;
+					return true; // Rx is complete. It timed out.
+				}
+				else if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // If a message was received
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_VALID_MESSAGE;
+					return true; // Rx is complete. It timed out.
+				}
+				else // Rx timed out. IDLE_STATE should also be set.
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT;
+					return true; // Rx is complete. It timed out.
+				}
+			}
+			// Rx has not yet timed out
+			if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) // RX_BUFFER_OVERFLOW takes priority over RX_VALID_MESSAGE
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_BUFFER_OVERFLOW;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // If a message was received
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_VALID_MESSAGE;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // If a satellite has been detected
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_SATELLITE_DETECTED;
+				return false; // Rx is not yet complete.
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME;
+				return false; // Rx is not yet complete.
+			}
+			break;
+		case INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE:
+			if (status.STATUS_REGISTER_BITS.TX_INVALID_MESSAGE) // If the message was invalid
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_INVALID_MESSAGE;
+				return true; // We're done. We can't send an invalid message...
+			}
+			else if (status.STATUS_REGISTER_BITS.TX_FINISHED) // If Tx is complete
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_FINISHED;
+				return true; // We're done.
+			}
+			else if (status.STATUS_REGISTER_BITS.IDLE_STATE) // If Tx has gone idle
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_IDLE_STATE;
+				return true; // We're done.
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE;
+				return false; // We're not done.
+			}
+			break;
+		case INST_TRANSMIT_ONE_PACKAGE_AND_START_RX:
+			if (status.STATUS_REGISTER_BITS.RX_TIMEOUT) // If Rx has timed out
+			{
+				if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) // If the buffer has overflowed
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_BUFFER_OVERFLOW;
+					return true; // Rx is complete. It timed out.
+				}
+				else if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // If a message was received
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_VALID_MESSAGE;
+					return true; // Rx is complete. It timed out.
+				}
+				else // Rx timed out. IDLE_STATE should also be set.
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT;
+					return true; // Rx is complete. It timed out.
+				}
+			}
+			// Rx has not yet timed out
+			if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) // RX_BUFFER_OVERFLOW takes priority over RX_VALID_MESSAGE
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_BUFFER_OVERFLOW;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) // If a message was received
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_VALID_MESSAGE;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // If a satellite has been detected
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_SATELLITE_DETECTED;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // If a satellite has been detected
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_SATELLITE_DETECTED;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.TX_INVALID_MESSAGE) // If the message was invalid
+			{
+				// Let's assume that the ARTIC still goes into Rx if the message was invalid. TO DO: check this!
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_INVALID_MESSAGE;
+				return false; // Rx is not yet complete.
+			}
+			else if (status.STATUS_REGISTER_BITS.TX_FINISHED) // If the message was transmitted
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_FINISHED;
+				return false; // Rx is not yet complete.
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX;
+				return false; // Not yet complete.
+			}
+			break;
+		case INST_GO_TO_IDLE:
+			if (status.STATUS_REGISTER_BITS.IDLE_STATE)
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE_IDLE_STATE;
+				return true; // We're done
+			}
+			else
+			{
+				*progress = ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE;
+				return false; // We're not done
+			}
+			break;
+		case INST_SATELLITE_DETECTION:
+			if (status.STATUS_REGISTER_BITS.SATELLITE_TIMEOUT) // Has detection timed out?
+			{
+				if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Did we detect a satellite
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED;
+					return true; // We're done. Rx timed out.
+				}
+				else
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT;
+					return true; // We're done. Rx timed out.
+				}
+			}
+			else
+			{
+				if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Have we detected a satellite
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED;
+					return false; // We may not be done? Maybe Rx continues until it times out? TO DO: check this!
+				}
+				else
+				{
+					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION;
+					return false; // We're not done.
+				}
+			}
+			break;
+		default:
+			*progress = ARTIC_R2_MCU_PROGRESS_UNKNOWN_INSTRUCTION;
+			return true; // Let's assume we're done?
+			break;
+	}
+	return false; // Make the compile warning go away...
+}
+
+// Pretty-print the MCU instruction progress
+void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progress, Stream &port)
+{
+	switch (progress)
+	{
+	case ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS:
+		port.println(F("MCU Instruction Progress: No Instruction In Progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION:
+		port.println(F("MCU Instruction Progress: Continuous Reception in progress."));
+  	break;
+	case ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_SATELLITE_DETECTED:
+		port.println(F("MCU Instruction Progress: Continuous Reception in progress. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_VALID_MESSAGE:
+		port.println(F("MCU Instruction Progress: Continuous Reception in progress. A valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_CONTINUOUS_RECEPTION_RX_BUFFER_OVERFLOW:
+  	port.println(F("MCU Instruction Progress: Continuous Reception in progress. The RX buffer has overflowed!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Receive One Message in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Receive One Message in progress. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Receive One Message is complete. A valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES:
+  	port.println(F("MCU Instruction Progress: Receive Two Messages in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Receive Two Messages in progress. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_TWO_MESSAGES_RX_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Receive Two Messages in progress. At least one valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress. At least one valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_BUFFER_OVERFLOW:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress. The RX buffer has overflowed!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time is complete. Reception timed out - no messages received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time is complete. At least one valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_RECEIVE_FIXED_TIME_RX_TIMEOUT_WITH_BUFFER_OVERFLOW:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time is complete. The RX buffer has overflowed!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE:
+  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_IDLE_STATE:
+  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_FINISHED:
+  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle is complete. Message was transmitted."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_INVALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle is complete. Message was invalid!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_FINISHED:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress. Message transmission is complete. Reception continues."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_TX_INVALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress. Message was invalid! Reception continues."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress. Message transmission should be complete. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress. Message transmission is complete. At least one valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_BUFFER_OVERFLOW:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time in progress. Message transmission is complete. The RX buffer has overflowed!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time is complete. Message transmission is complete. Reception timed out - no messages received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_VALID_MESSAGE:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time is complete. Message transmission is complete. At least one valid message has been received."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_FIXED_RX_RX_TIMEOUT_WITH_BUFFER_OVERFLOW:
+  	port.println(F("MCU Instruction Progress: Transmit One Package With Reception For Fixed Time is complete. Message transmission is complete. The RX buffer has overflowed!"));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE:
+  	port.println(F("MCU Instruction Progress: Go To Idle in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE_IDLE_STATE:
+  	port.println(F("MCU Instruction Progress: Go To Idle is complete."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION:
+  	port.println(F("MCU Instruction Progress: Satellite Detection in progress."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Satellite Detection in progress. A satellite has been detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT:
+  	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED:
+  	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out. A satellite was detected."));
+		break;
+	case ARTIC_R2_MCU_PROGRESS_UNKNOWN_INSTRUCTION:
+  	port.println(F("MCU Instruction Progress: UNKNOWN INSTRUCTION!"));
+		break;
+	default:
+		port.println(F("MCU Instruction Progress: UNKNOWN PROGRESS STATE! This should be impossible!"));
+		break;
+	}
 }
 
 // Read the firmware version from PMEM

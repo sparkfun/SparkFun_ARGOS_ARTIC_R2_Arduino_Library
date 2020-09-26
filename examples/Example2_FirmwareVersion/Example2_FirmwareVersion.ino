@@ -2,7 +2,9 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: August 18th 2020
+  Date: September 25th 2020
+
+  This example begins (initializes) the ARTIC and then reads and prints the firmware version.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -54,14 +56,15 @@ void setup()
 
   myARTIC.enableDebugging(); // Enable debug messages to Serial
 
+  // Begin (initialize) the ARTIC
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {
-    Serial.println("ARTIC R2 not detected. Freezing...");
+    Serial.println(F("ARTIC R2 not detected. Freezing..."));
     while (1);
   }
 
   uint8_t buffer[9]; // Buffer to store the firmware version (8 bytes + NULL)
-  uint8_t *ptr; // Pointer to the buffer
+  uint8_t *ptr = buffer; // Pointer to the buffer
 
   myARTIC.readFirmwareVersion(ptr); // Read the firmware version from PMEM
 

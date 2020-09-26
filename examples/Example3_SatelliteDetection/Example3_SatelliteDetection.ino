@@ -2,7 +2,15 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: August 18th 2020
+  Date: September 25th 2020
+
+  This example:
+    begins (initializes) the ARTIC;
+    reads and prints the ARTIC TX and RX configuration;
+    reads and prints the firmware status;
+    sets the satellite detection timeout to 60 seconds;
+    starts satellite detection;
+    keeps checking the MCU status until a satellite is detected or the detection times out.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -65,67 +73,46 @@ void setup()
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
-  if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_A2_MODE) Serial.println(F("TX mode is: ARGOS PTT A2"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_A3_MODE) Serial.println(F("TX mode is: ARGOS PTT A3"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_ZE_MODE) Serial.println(F("TX mode is: ARGOS PTT ZE"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_HD_MODE) Serial.println(F("TX mode is: ARGOS PTT HD"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_A4_MD_MODE) Serial.println(F("TX mode is: ARGOS PTT A4 MD"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_A4_HD_MODE) Serial.println(F("TX mode is: ARGOS PTT A4 HD"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.TX_CONFIGURATION == TX_CONFIG_ARGOS_PTT_A4_VLD_MODE) Serial.println(F("TX mode is: ARGOS PTT A4 VLD"));
-  else Serial.println(F("TX mode is not defined!"));
-  if (configuration.CONFIGURATION_REGISTER_BITS.RX_CONFIGURATION == RX_CONFIG_ARGOS_3_RX_MODE) Serial.println(F("RX mode is: ARGOS 3"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.RX_CONFIGURATION == RX_CONFIG_ARGOS_3_RX_BACKUP_MODE) Serial.println(F("RX mode is: ARGOS 3 BACKUP"));
-  else if (configuration.CONFIGURATION_REGISTER_BITS.RX_CONFIGURATION == RX_CONFIG_ARGOS_4_RX_MODE) Serial.println(F("RX mode is: ARGOS 4"));
-  else Serial.println(F("RX mode is not defined!"));
+  myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
+  
+  //myARTIC.printARGOSconfiguration(configuration, Serial1); // E.g.: pretty-print the TX and RX configuration to Serial1 instead
 
+  // Read and print the firmware status
   ARTIC_R2_Firmware_Status status;
   myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-
-  if (!status.STATUS_REGISTER_BITS.IDLE) Serial.println(F("Warning! ARTIC is not idle! This is likely to fail..."));
+  Serial.println(F("ARTIC R2 Firmware Status:"));
+  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+  
+  //myARTIC.printFirmwareStatus(status, Serial1); // E.g.: pretty-print the firmware status to Serial1 instead
 
   // Set the satellite detection timeout to 60 seconds
-  myARTIC.setSatelliteDetectionTimeout(60);
-
-  // Delay for 10ms
-  delay(10);
-
-  // Check that the MCU command was accepted
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-  if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED) Serial.println(F("MCU command was accepted"));
-  else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
+  if (myARTIC.setSatelliteDetectionTimeout(60) == false)
   {
-    Serial.println(F("MCU command was rejected! Freezing..."));
-    while (1)
-      ; // Do nothing more
-  }
-  else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
-  {
-    Serial.println(F("MCU command overflow! Freezing..."));
+    Serial.println("setSatelliteDetectionTimeout failed. Freezing...");
     while (1)
       ; // Do nothing more
   }
 
   // Start satellite detection
-  // The ARTIC will start looking for a satellite for a specified amount of time.
+  // The ARTIC will start looking for a satellite for the specified amount of time.
   // If no satellite is detected, INT 2 will be set with the ‘SATELLITE_TIMEOUT’ flag.
   // If a satellite was detected, by receiving 5 consecutive 0x7E flags, INT 1 will be set with the ‘RX_SATELLITE_DETECTED’ flag.
-  myARTIC.sendCommandByte(INST_SATELLITE_DETECTION);
-
-  // Delay for 10ms
-  delay(10);
-
-  // Check that the MCU command was accepted
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-  if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED) Serial.println(F("MCU command was accepted"));
-  else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
+  // sendMCUinstruction returns an ARTIC_R2_MCU_Command_Result
+  // sendMCUinstruction will return ARTIC_R2_MCU_COMMAND_ACCEPTED if the instruction was accepted
+  ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_SATELLITE_DETECTION);
+  if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
   {
-    Serial.println(F("MCU command was rejected! Freezing..."));
-    while (1)
-      ; // Do nothing more
-  }
-  else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
-  {
-    Serial.println(F("MCU command overflow! Freezing..."));
+    Serial.println();
+    Serial.println("<sendMCUinstruction(INST_SATELLITE_DETECTION) failed>");
+    Serial.println();
+    myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
+    Serial.println(F("ARTIC R2 Firmware Status:"));
+    myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+    Serial.println();
+    Serial.println(F("ARTIC_R2_MCU_Command_Result:"));
+    myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
+    Serial.println();
+    Serial.println("</sendMCUinstruction(INST_SATELLITE_DETECTION) failed> Freezing...");
     while (1)
       ; // Do nothing more
   }
@@ -133,49 +120,36 @@ void setup()
 
 void loop()
 {
-  delay(1000); // Query the ARTIC firmware status once per second
+  delay(1000);
 
   Serial.println();
 
+  // Read and print the ARTIC R2 status register
   ARTIC_R2_Firmware_Status status;
   myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-
-  if (status.STATUS_REGISTER_BITS.IDLE) // Check the IDLE flag
-    Serial.println(F("ARTIC is IDLE"));
-  else
-    Serial.println(F("ARTIC is not IDLE"));
-
-  if (status.STATUS_REGISTER_BITS.BUSY) // Check the BUSY flag
-    Serial.println(F("ARTIC is BUSY"));
-  else
-    Serial.println(F("ARTIC is not BUSY"));
-
-  if (status.STATUS_REGISTER_BITS.IDLE_STATE) // Check the IDLE_STATE flag
-    Serial.println(F("ARTIC firmware has returned to the idle state"));
-  else
-    Serial.println(F("ARTIC firmware has not yet returned to the idle state"));
-
-  if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Check the RX_SATELLITE_DETECTED flag
-  {
-    Serial.println(F("A satellite was detected! Satellite detection complete..."));
-    //while (1)
-    //  ; // Do nothing more
-  }
-
-  if (status.STATUS_REGISTER_BITS.SATELLITE_TIMEOUT) // Check the SATELLITE_TIMEOUT flag
-  {
-    Serial.println(F("Satellite detection timed out! Satellite detection complete..."));
-    //while (1)
-    //  ; // Do nothing more
-  }
+  Serial.println(F("ARTIC R2 Firmware Status:"));
+  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
 
   if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when a satellite is detected
     Serial.println(F("INT1 pin is high. Satellite detected!"));
-  else
-    Serial.println(F("INT1 pin is low."));
 
   if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high if satellite detection times out
     Serial.println(F("INT2 pin is high. Satellite detection has timed out!"));
-  else
-    Serial.println(F("INT2 pin is low."));
+
+  Serial.println();
+
+  // Read and print the instruction progress
+  ARTIC_R2_MCU_Instruction_Progress progress;
+  // checkMCUinstructionProgress will return true if the instruction is complete
+  boolean instructionComplete = myARTIC.checkMCUinstructionProgress(&progress); // Check the instruction progress
+  Serial.println(F("ARTIC R2 instruction progress:"));
+  myARTIC.printInstructionProgress(progress); // Pretty-print the progress to Serial
+
+  if (instructionComplete)
+  {
+    Serial.println();
+    Serial.println(F("Instruction is complete! Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
 }
