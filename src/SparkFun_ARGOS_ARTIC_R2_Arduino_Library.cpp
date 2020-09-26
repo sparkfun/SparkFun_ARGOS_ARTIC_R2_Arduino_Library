@@ -594,13 +594,13 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction)
 		(instruction != INST_SATELLITE_DETECTION))
 		return ARTIC_R2_MCU_COMMAND_INVALID; // Instruction is invalid
 
-	// Check if this is not a INST_GO_TO_IDLE instruction
-	if (instruction != INST_GO_TO_IDLE)
-	{
-		// Check that there is not already an instruction in progress
-		if (_instructionInProgress > 0)
-			return ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS; // Abort - an instruction is already in progress
-	}
+	// // Check if this is not a INST_GO_TO_IDLE instruction
+	// if (instruction != INST_GO_TO_IDLE)
+	// {
+	// 	// Check that there is not already an instruction in progress
+	// 	if (_instructionInProgress > 0)
+	// 		return ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS; // Abort - an instruction is already in progress
+	// }
 
 	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
 
@@ -1539,22 +1539,11 @@ boolean ARTIC_R2::clearAddressLUT()
 		return (false);
 }
 
-// Add a new address to the message filtering LUT
-// AddressLSBits and AddressMSBits are 24-bit (not 32)
-boolean ARTIC_R2::addAddressToLUT(uint32_t AddressLSBits, uint32_t AddressMSBits)
+// Add a new address (platform ID) to the message filtering LUT
+boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 {
-	if (AddressLSBits >= 0x01000000) // Check for an invalid address (> 24 bits)
-	{
-		if (_printDebug == true)
-			_debugPort->println(F("addAddressToLUT: AddressLSBits is invalid!"));
-		return (false);
-	}
-	if (AddressMSBits >= 0x01000000) // Check for an invalid address (> 24 bits)
-	{
-		if (_printDebug == true)
-			_debugPort->println(F("addAddressToLUT: AddressMSBits is invalid!"));
-		return (false);
-	}
+	uint32_t AddressLSBits = platformID & 0xFFFFFF; // Extract the 24 LS bits
+	uint32_t AddressMSBits = platformID >> 24; // Extract the 8 MS bits
 
 	// Read the LUT Length
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
