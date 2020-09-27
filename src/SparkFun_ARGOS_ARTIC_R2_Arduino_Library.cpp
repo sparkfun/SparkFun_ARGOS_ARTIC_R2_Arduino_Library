@@ -37,6 +37,8 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay based on the clock speed
 	_delay24cycles++; // Round up by 1
 
+	_instructionInProgress = 0; // Clear _instructionInProgress
+
 	// Mandatory pins
 	_cs = user_CSPin;
 	_boot = user_BOOTPin;
@@ -654,6 +656,13 @@ boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress 
 	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
 	readStatusRegister(&status);
 
+	// TO DO: Work out how to handle INTERNAL_ERROR. Maybe like this?
+	if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR)
+	{
+		*progress = ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR;
+		return true; // Return truw to indicate the instruction is 'complete'?
+	}
+
 	switch (_instructionInProgress)
 	{
 		case 0: // If there is no instruction in progress
@@ -1004,6 +1013,9 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
 	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED:
   	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out. A satellite was detected."));
 		break;
+	case ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR:
+		port.println(F("MCU Instruction Progress: INTERNAL ERROR!"));
+		break;
 	case ARTIC_R2_MCU_PROGRESS_UNKNOWN_INSTRUCTION:
   	port.println(F("MCU Instruction Progress: UNKNOWN INSTRUCTION!"));
 		break;
@@ -1287,7 +1299,12 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
-	return ((readTCXOControlVoltage() == voltage) && (readTCXOAutoDisable() == autoDisable));
+	// Read the new values
+	float new_voltage = readTCXOControlVoltage();
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+	boolean new_disable = readTCXOAutoDisable();
+
+	return ((new_voltage == voltage) && (new_disable == autoDisable));
 }
 
 // Read the TCXO control voltage. Auto-disable is ignored.
@@ -1352,6 +1369,74 @@ boolean ARTIC_R2::readTCXOAutoDisable()
 		return (false);
 }
 
+// Set the ARGOS 2/3 TX Frequency
+boolean ARTIC_R2::setARGOS23TxFrequency(float freq_MHz)
+{
+	return setARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_2_3, freq_MHz);
+}
+
+// Set the ARGOS 4 TX Frequency
+boolean ARTIC_R2::setARGOS4TxFrequency(float freq_MHz)
+{
+	return setARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_4, freq_MHz);
+}
+
+// Set the ARGOS TX Frequency using the equation defined in section 3.5.3 of the ARTIC R2 datasheet
+boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
+{
+	double fractional_part = (double)freq_MHz; // Convert freq to double
+	fractional_part *= 4; // Multiply by 4
+	fractional_part /= 26; // Divide by 26 (MHz)
+	fractional_part -= 61; // Subtract 61
+	fractional_part *= 4194304; // Multiply by 2^22
+
+	uint32_t round = (uint32_t)fractional_part;
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setARGOSTxFrequency: setting memory location 0x"));
+		_debugPort->print(mem_loc, HEX);
+		_debugPort->print(F(" to 0x"));
+		_debugPort->println(round, HEX);
+	}
+
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = mem_loc;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	write24BitWord(round); // Update frequency (fractional PLL parameter)
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	// Check that the frequency is correct by reading the value back again
+
+	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = mem_loc;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	uint32_t new_val = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+	return (new_val == round);
+}
+
 // Enable the RX CRC check by writing 0x000001 to MEM_LOC_RX_FILTERING_ENABLE_CRC
 boolean ARTIC_R2::enableRXCRC()
 {
@@ -1364,7 +1449,11 @@ boolean ARTIC_R2::enableRXCRC()
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(0x000001); // Enable CRC
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Check that the CRC is enabled by reading the value back again
 
@@ -1401,7 +1490,11 @@ boolean ARTIC_R2::disableRXCRC()
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(0x000000); // Disable CRC
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Check that the CRC is disabled by reading the value back again
 
@@ -1439,7 +1532,11 @@ boolean ARTIC_R2::enableRXTransparentMode()
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(0x000001); // Enable transparent mode
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Check that transparent mode is enabled by reading the value back again
 
@@ -1477,7 +1574,11 @@ boolean ARTIC_R2::disableRXTransparentMode()
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(0x000000); // Disable transparent mode
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Check that transparent mode is disabled by reading the value back again
 
@@ -1514,7 +1615,11 @@ boolean ARTIC_R2::clearAddressLUT()
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(0x000000); // Clear the LUT
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Check that the LUT is clear by reading the length back again
 
@@ -1562,6 +1667,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	readMultipleWords(ptr, 24, 1); // Read the LUT length
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	uint32_t tableLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
 	if (tableLength > 49)
@@ -1580,7 +1687,11 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	writeTwo24BitWords(AddressLSBits, AddressMSBits); // Write the address words
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Now increment the table length
 
@@ -1594,7 +1705,11 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
 	write24BitWord(tableLength); // Write the incremented length
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Finally, read the LUT Length and check it was incremented correctly
 	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
@@ -1784,6 +1899,115 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 	return (true);
 }
 
+// Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
+// The payload contains _only_ the 28-bit platform ID (left justified)
+boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
+{
+	_txPayloadLengthBits = 28;
+	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[3] = (platformID << 4) & 0xFF;
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS4VLD0: left-justified payload is 0x"));
+		_debugPort->print(_txPayloadBytes[0], HEX);
+		_debugPort->print(_txPayloadBytes[1], HEX);
+		_debugPort->print(_txPayloadBytes[2], HEX);
+		_debugPort->println(_txPayloadBytes[3], HEX);
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
+// The payload contains the 28-bit platform ID and the 28 bits of user data (left justified)
+boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
+{
+	_txPayloadLengthBits = 56;
+	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[3] = ((platformID << 4) | ((userData >> 24) & 0xF)) & 0xFF; // Left justify the 28 bits of user data
+	_txPayloadBytes[4] = (userData >> 16) & 0xFF;
+	_txPayloadBytes[5] = (userData >> 8) & 0xFF;
+	_txPayloadBytes[6] = userData & 0xFF;
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS4VLD28: left-justified payload is 0x"));
+		_debugPort->print(_txPayloadBytes[0], HEX);
+		_debugPort->print(_txPayloadBytes[1], HEX);
+		_debugPort->print(_txPayloadBytes[2], HEX);
+		_debugPort->print(_txPayloadBytes[3], HEX);
+		_debugPort->print(_txPayloadBytes[4], HEX);
+		_debugPort->print(_txPayloadBytes[5], HEX);
+		_debugPort->println(_txPayloadBytes[6], HEX);
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload by copying txPayloadLengthBits and txPayloadBytes into X memory
+boolean ARTIC_R2::setTxPayload()
+{
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	write24BitWord(_txPayloadLengthBits); // Write the encoded message length
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	int totalWords = ((int)_txPayloadLengthBits) / 24; // Convert bits to words
+	if ((((int)_txPayloadLengthBits) % 24) > 0) totalWords++; // Increment totalWords by 1 if there are any additional bits
+
+	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD + 1;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	uint8_t *bufferPtr = _txPayloadBytes;
+
+	writeMultipleWords(bufferPtr, 24, totalWords); // Write the words
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	// Read the encoded message length back again
+
+	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	uint32_t newPayloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+ 	return (newPayloadLength == _txPayloadLengthBits);
+}
+
 // Write a single 24-bit word to the ARTIC R2
 void ARTIC_R2::write24BitWord(uint32_t word)
 {
@@ -1811,6 +2035,32 @@ void ARTIC_R2::writeTwo24BitWords(uint32_t word1, uint32_t word2)
 	_spiPort->transfer(word2 >> 16);
 	_spiPort->transfer(word2 >> 8);
 	_spiPort->transfer(word2 & 0xFF);
+
+	digitalWrite(_cs, HIGH);
+	_spiPort->endTransaction();
+}
+
+// Write multiple words to the ARTIC R2
+void ARTIC_R2::writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords)
+{
+	int bufferPointer = 0;
+
+	if ((wordSizeInBits != 24) && (wordSizeInBits != 32))
+		return;
+	//if ((numWords <= 0) || (numWords > ARTIC_R2_MAX_SPI_TRANSFER))
+	if (numWords <= 0)
+		return;
+
+	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
+	digitalWrite(_cs, LOW);
+
+	for (int word = 0; word < numWords; word++)
+	{
+		for (int byteSize = 0; byteSize < (wordSizeInBits >> 4); byteSize++)
+		{
+			_spiPort->transfer(buffer[bufferPointer++]);
+		}
+	}
 
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
@@ -1882,165 +2132,3 @@ boolean ARTIC_R2::clearInterrupts(uint8_t interrupts)
 
 	return (true); // Success!
 }
-
-/*
-
-void ARTIC_R2::construct_PPT_A3_header(uint8_t *buffer, uint32_t *index, uint32_t total_len_bits, uint8_t len_bitmask)
-{
-    buffer[0] = total_len_bits >> 16;
-    buffer[1] = total_len_bits >> 8;
-    buffer[2] = total_len_bits;
-
-    buffer[3] = len_bitmask | (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 24;
-    buffer[4] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 16;
-    buffer[5] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 8;
-    buffer[6] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK);
-
-    *index += 7;
-}
-
-void ARTIC_R2::construct_ZTE_header(uint8_t *buffer, uint32_t total_len_bits)
-{
-    buffer[0] = total_len_bits >> 16;
-    buffer[1] = total_len_bits >> 8;
-    buffer[2] = total_len_bits;
-
-    buffer[3] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 24;
-    buffer[4] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 16;
-    buffer[5] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK) >> 8;
-    buffer[6] = (config.artic->contents.device_identifier & ARTIC_MSG_ID_BITMASK);
-}
-
-void ARTIC_R2::construct_artic_message_buffer(const uint8_t *buffer, size_t buffer_size, uint8_t *send_buffer, uint32_t *bytes_to_send)
-{
-    uint32_t index = 0;
-    *bytes_to_send = 0;
-
-    memset(send_buffer, 0, ARTIC_MSG_MAX_SIZE);
-
-    if (buffer_size <= ARTIC_ZTE_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_ZTE_BYTES_TO_SEND;
-        construct_ZTE_header(send_buffer, ARTIC_ZTE_MSG_TOTAL_BITS);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_24_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_24_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_24_MSG_TOTAL_BITS, ARTIC_PTT_A3_24_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_56_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_56_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_56_MSG_TOTAL_BITS, ARTIC_PTT_A3_56_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_88_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_88_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_88_MSG_TOTAL_BITS, ARTIC_PTT_A3_88_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_120_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_120_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_120_MSG_TOTAL_BITS, ARTIC_PTT_A3_120_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_152_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_152_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_152_MSG_TOTAL_BITS, ARTIC_PTT_A3_152_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_184_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_184_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_184_MSG_TOTAL_BITS, ARTIC_PTT_A3_184_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_216_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_216_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_216_MSG_TOTAL_BITS, ARTIC_PTT_A3_216_MSG_LEN_FIELD);
-    }
-    else if (buffer_size <= ARTIC_PTT_A3_248_MAX_USER_BYTES)
-    {
-        *bytes_to_send = ARTIC_PTT_A3_248_BYTES_TO_SEND;
-        construct_PPT_A3_header(send_buffer, &index, ARTIC_PTT_A3_248_MSG_TOTAL_BITS, ARTIC_PTT_A3_248_MSG_LEN_FIELD);
-    }
-
-    // Copy the data payload into the message
-    memcpy(&send_buffer[index], buffer, buffer_size);
-}
-
-*/
-
-/*! \brief Function to send a message using ARGOS A3 standard
- *
- * \param buffer[in] Array with the data to send.
- * \param  buffer_size[in] total bytes of data to send.
- *
- * \return \ref SYSHAL_SAT_NO_ERROR on success.
- * \return \ref SYSHAL_SAT_ERROR_NOT_PROGRAMMED ARTIC device has to be programmed everytime before send data.
- * \return \ref SYSHAL_SAT_ERROR_MAX_SIZE Maximum size of user data is 31 bytes.
- * \return ref SYSHAL_SAT...
- */
-/*
-int ARTIC_R2::syshal_sat_send_message(const uint8_t *buffer, size_t buffer_size)
-{
-    uint8_t send_buffer[ARTIC_MSG_MAX_SIZE] = {0};
-    uint32_t bytes_to_send;
-    uint8_t artic_packet_type;
-    int ret;
-
-    if (sat_state != STATE_PROGRAMMED)
-        return SYSHAL_SAT_ERROR_NOT_PROGRAMMED;
-
-    if (buffer_size > MAX_TX_SIZE_BYTES)
-        return SYSHAL_SAT_ERROR_MAX_SIZE;
-
-    if (buffer_size == 0)
-        artic_packet_type = ARTIC_CMD_SET_PTT_ZE_TX_MODE;
-    else
-        artic_packet_type = ARTIC_CMD_SET_PTT_A3_TX_MODE;
-
-    // Set ARGOS TX MODE in ARTIC device and wait for the status response
-    ret = send_command_check_clean(artic_packet_type, 1, MCU_COMMAND_ACCEPTED, true, SYSHAL_SAT_ARTIC_DELAY_INTERRUPT);
-    if (ret)
-        return ret;
-
-    construct_artic_message_buffer(buffer, buffer_size, send_buffer, &bytes_to_send);
-
-    for (size_t i = 0; i < bytes_to_send; ++i)
-    {
-        DEBUG_PR_TRACE("Byte[%u]: %02X", (unsigned int) i, (unsigned int) send_buffer[i]);
-    }
-
-    // It could be a problem if we set less data than we are already sending, just be careful and in case change TOTAL
-    // Burst transfer the tx payload
-    ret = burst_access(XMEM, TX_PAYLOAD_ADDRESS, send_buffer, NULL, bytes_to_send, false);
-    if (ret)
-        return SYSHAL_SAT_ERROR_SPI;
-
-#ifndef DEBUG_DISABLED
-    print_status();
-#endif
-
-    // Send to ARTIC the command for sending only one packet and wait for the response TX_FINISHED
-    ret = send_command_check_clean(ARTIC_CMD_START_TX_1M_SLEEP, 1, TX_FINISHED, true, SYSHAL_SAT_ARTIC_TIMEOUT_SEND_TX);
-
-    if (ret)
-    {
-        // If there is a problem wait until interrupt 2 is launched and get the status response
-        if (!wait_interrupt(SYSHAL_SAT_ARTIC_DELAY_INTERRUPT, INTERRUPT_2))
-        {
-#ifndef DEBUG_DISABLED
-            print_status();
-#endif
-            clear_interrupt(INTERRUPT_2);
-            return SYSHAL_SAT_ERROR_TX;
-        }
-        else
-        {
-            return ret;
-        }
-    }
-
-    return SYSHAL_SAT_NO_ERROR;
-}
-*/

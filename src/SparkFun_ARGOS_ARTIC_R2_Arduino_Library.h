@@ -212,7 +212,9 @@ typedef enum {
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED,
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT,
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED,
-	
+
+	ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR,
+
 	ARTIC_R2_MCU_PROGRESS_UNKNOWN_INSTRUCTION,
 } ARTIC_R2_MCU_Instruction_Progress;
 
@@ -319,6 +321,9 @@ public:
 	float readTCXOControlVoltage(); // Read the TCXO control voltage. Auto-disable is ignored.
 	boolean readTCXOAutoDisable(); // Read the TCXO control auto-disable bit
 
+	boolean setARGOS23TxFrequency(float freq_MHz); // Set the ARGOS 2/3 TX Frequency
+	boolean setARGOS4TxFrequency(float freq_MHz); // Set the ARGOS 4 TX Frequency
+
 	boolean enableRXCRC(); // Enable RX CRC check
 	boolean disableRXCRC(); // Disable RX CRC check
 	boolean enableRXTransparentMode(); // Enable RX transparent mode
@@ -327,6 +332,9 @@ public:
 	boolean addAddressToLUT(uint32_t platformID); // Add the specified platform ID to the message filter Look Up Table
 
 	boolean readDownlinkMessage(Downlink_Message *downlinkMessage); // Read a downlink message from the RX payload buffer
+
+	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
+	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 
 private:
 	//Variables
@@ -354,11 +362,18 @@ private:
 	// It will be set to one of the INST_ states by sendMCUinstruction.
 	uint8_t _instructionInProgress = 0;
 
+	// Storage for message transmission
+	uint32_t _txPayloadLengthBits = 0; // The encoded message length in bits
+	uint8_t _txPayloadBytes[660]; // Storage for up to 220 24-bit words
+
 	//Functions
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode);
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords);
 	void write24BitWord(uint32_t word);
 	void writeTwo24BitWords(uint32_t word1, uint32_t word2);
+	void writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords);
+	boolean setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz);
+	boolean setTxPayload();
 };
 
 #endif

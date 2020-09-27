@@ -9,12 +9,12 @@
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
     sets the satellite detection timeout to 60 seconds;
-    sets the RX mode to ARGOS 3;
-    adds the platform ID to the address Look Up Table (LUT);
-    disables RX transparent mode;
-    enables the RX CRC check (even though this is enabled by default);
-    instructs the ARTIC to Receive One Message (for an unlimited time);
-    keeps checking the MCU status until a message is received.
+    sets the TX mode to ARGOS 4 VLD (0 user bits);
+    sets the TX frequency;
+    instructs the ARTIC to Transmit One Package And Go Idle;
+    keeps checking the MCU status until transmit is complete.
+
+  The ARGOS 4 VLD message contains the 28-bit platform ID and either 0 or 28 bits of user data.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -102,8 +102,8 @@ void setup()
       ; // Do nothing more
   }
 
-  // Set the RX mode to ARGOS 3
-  ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
+  // Set the TX mode to ARGOS 4 VLD
+  ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
   if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
   {
@@ -116,42 +116,37 @@ void setup()
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration);
 
-  // Add our address (platform ID) to the LUT.
-  //   You can add multiple addresses if required, up to a maximum of 50.
-  //   Add an additional address by calling addAddressToLUT again.
-  //   addAddressToLUT will return false if the LUT is full.
-  //   You can clear the LUT by calling clearAddressLUT.
-  if (myARTIC.addAddressToLUT(PLATFORM_ID) == false)
+  // Set the ARGOS 4 TX frequency to 401.68 MHz
+  if (myARTIC.setARGOS4TxFrequency(401.68) == false)
   {
-    Serial.println(F("addAddressToLUT failed! Freezing..."));
+    Serial.println("setARGOS4TxFrequency failed. Freezing...");
+    while (1)
+      ; // Do nothing more
+  }
+  
+  // Configure the Tx payload for ARGOS 4 VLD using our platform ID and 0 bits of user data
+  if (myARTIC.setPayloadARGOS4VLD0(PLATFORM_ID) == false)
+  {
+    Serial.println(F("setPayloadARGOS4VLD0 failed! Freezing..."));
     while (1)
       ; // Do nothing more
   }
 
-  // Disable RX transparent mode so we will only receive messages addressed to us
-  // (transparent mode is disabled by default)
-  if (myARTIC.disableRXTransparentMode() == false)
+  // Configure the Tx payload for ARGOS 4 VLD using our platform ID and 28 bits of user data
+  uint32_t userData = 0x1234567;
+  if (myARTIC.setPayloadARGOS4VLD28(PLATFORM_ID, userData) == false)
   {
-    Serial.println(F("disableRXTransparentMode failed! Freezing..."));
+    Serial.println(F("setPayloadARGOS4VLD28 failed! Freezing..."));
     while (1)
       ; // Do nothing more
   }
 
-  // Enable the RX CRC check (even though this is enabled by default)
-  if (myARTIC.enableRXCRC() == false)
-  {
-    Serial.println(F("enableRXCRC failed! Freezing..."));
-    while (1)
-      ; // Do nothing more
-  }
-
-  // Start the ARTIC in receiving mode for an unlimited time until 1 message has been received.
-  // If the message is received the Artic will go to IDLE. The user can abort the reception using the ‘Go to idle’ command.
-  result = myARTIC.sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE);
+  // Start the ARTIC in Transmit One Package And Go Idle mode
+  result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);
   if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
   {
     Serial.println();
-    Serial.println("<sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE) failed>");
+    Serial.println("<sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) failed>");
     Serial.println();
     myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
     Serial.println(F("ARTIC R2 Firmware Status:"));
@@ -160,7 +155,7 @@ void setup()
     Serial.println(F("ARTIC_R2_MCU_Command_Result:"));
     myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
     Serial.println();
-    Serial.println("</sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE) failed> Freezing...");
+    Serial.println("</sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) failed> Freezing...");
     while (1)
       ; // Do nothing more
   }
@@ -178,9 +173,14 @@ void loop()
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
 
-  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when a satellite is detected
+  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when TX is finished
   {
-    Serial.println(F("INT1 pin is high. Valid message received!"));
+    Serial.println(F("INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!"));
+  }
+
+  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
+  {
+    Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened... ARGOS 4 VLD is as simple as it gets!)"));
   }
 
   Serial.println();
@@ -195,36 +195,7 @@ void loop()
   if (instructionComplete)
   {
     Serial.println();
-    Serial.println(F("Instruction is complete!"));
-    Serial.println();
-    
-    if (progress == ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE) // If a message was received, read it.
-    {
-      // Read a downlink message from the RX payload buffer
-      Downlink_Message downlinkMessage;
-      if (myARTIC.readDownlinkMessage(&downlinkMessage))
-      {
-        Serial.println(F("Message received:"));
-        Serial.printf("Payload length:  %d\n", downlinkMessage.payloadLength);
-        Serial.printf("Addressee ID:    0x%04X\n", downlinkMessage.addresseeIdentification);
-        Serial.printf("ADCS:            0x%02X\n", downlinkMessage.ADCS);
-        Serial.printf("Service:         0x%02X\n", downlinkMessage.service);
-        Serial.printf("FCS:             0x%04X\n", downlinkMessage.FCS);
-        Serial.print(F("Payload buffer:  0x"));
-        for (int i = 0; i < 17; i++)
-        {
-          Serial.printf("%02X", downlinkMessage.payload[i]);
-        }
-        Serial.println();
-        //while (1)
-        //  ; // Do nothing more
-      }
-      else
-      {
-        Serial.println(F("readDownlinkMessage failed!"));
-      }
-    }
-    
+    Serial.println(F("Transmission is complete!"));
     Serial.println();
     Serial.println(F("We are done. Freezing..."));
     while (1)
