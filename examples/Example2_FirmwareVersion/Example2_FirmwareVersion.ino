@@ -63,13 +63,12 @@ void setup()
     while (1);
   }
 
-  uint8_t buffer[9]; // Buffer to store the firmware version (8 bytes + NULL)
-  uint8_t *ptr = buffer; // Pointer to the buffer
+  char buffer[9]; // Buffer to store the firmware version (8 bytes + NULL)
 
-  myARTIC.readFirmwareVersion(ptr); // Read the firmware version from PMEM
+  myARTIC.readFirmwareVersion(&buffer[0]); // Read the firmware version from PMEM
 
   Serial.print(F("ARTIC R2 firmware version is: "));
-  Serial.println(*buffer);
+  Serial.println(buffer);
 }
 
 void loop()

@@ -51,6 +51,8 @@ uint8_t INT2_Pin = 7;
 uint8_t RESET_Pin = 8;
 uint8_t PWR_EN_Pin = 9;
 
+unsigned long beginFinishedAt; // Keep a record of millis() when .begin finished
+
 void setup()
 {
   Serial.begin(115200);
@@ -68,16 +70,31 @@ void setup()
     while (1);
   }
 
+  beginFinishedAt = millis(); // Record when .begin finished
+}
+
+void loop()
+{
   ARTIC_R2_Firmware_Status status;
   myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
 
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-  
-  //myARTIC.printFirmwareStatus(status, Serial1); // E.g.: pretty-print the firmware status to Serial1 instead
-}
+  Serial.println();
 
-void loop()
-{
-  // Nothing to do here...
+  //myARTIC.printFirmwareStatus(status, Serial1); // E.g.: pretty-print the firmware status to Serial1 instead
+
+  Serial.print(F("It has been "));
+  Serial.print((millis() - beginFinishedAt) / 1000);
+  Serial.println(F(" seconds since .begin finished."));
+  Serial.println();
+  
+  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when the RX offset calibration has completed.
+  {
+    Serial.println(F("INT1 pin is high. ARTIC is ready! Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
+
+  delay(5000);
 }

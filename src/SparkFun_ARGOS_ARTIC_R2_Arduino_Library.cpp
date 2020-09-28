@@ -28,11 +28,14 @@
 
 boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BOOTPin, uint8_t user_PWRENPin, uint8_t user_INT1Pin, uint8_t user_INT2Pin, uint8_t user_GAIN8Pin, uint8_t user_GAIN16Pin, uint32_t spiPortSpeed, SPIClass &spiPort)
 {
+	if (_printDebug == true)
+		_debugPort->println(F("begin: ARTIC is starting..."));
+
 	//Get user settings
 	_spiPort = &spiPort;
 	_spiPortSpeed = spiPortSpeed;
-	if (_spiPortSpeed > 25000000)
-		_spiPortSpeed = 25000000; //Datasheet indicates max speed is 25MHz
+	if (_spiPortSpeed > 5000000)
+		_spiPortSpeed = 5000000; //Datasheet indicates max speed is 5MHz for P memory writes
 
 	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay based on the clock speed
 	_delay24cycles++; // Round up by 1
@@ -52,7 +55,7 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	_gain16 = user_GAIN16Pin;
 
 	pinMode(_pwr_en, OUTPUT);
-	digitalWrite(_pwr_en, HIGH); // Disable the power until we have configured the rest of the IO pins
+	disableARTICpower(); // Disable the power until we have configured the rest of the IO pins
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
@@ -72,36 +75,104 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	pinMode(_int1, INPUT_PULLUP);
 	pinMode(_int2, INPUT_PULLUP);
 
-	if ((_gain8 >= 0) && (_gain8 >= 16)) // Set the RF TX gain
+	if ((_gain8 >= 0) && (_gain16 >= 0)) // Set the RF TX gain if both pins are defined
 	{
 		pinMode(_gain8, OUTPUT);
-		digitalWrite(_gain8, LOW); // Default to maximum gain
 		pinMode(_gain16, OUTPUT);
-		digitalWrite(_gain16, LOW); // Default to maximum gain
+		setTXgain(24); // Default to maximum gain
 	}
 
-	digitalWrite(_pwr_en, LOW); // Enable power for the ARTIC R2
+	enableARTICpower(); // Enable power for the ARTIC R2
 	delay(100);
 	digitalWrite(_rst, HIGH); //Bring the ARTIC out of reset
 
+	if (_printDebug == true)
+		_debugPort->println(F("begin: IO pins are configured..."));
+
 #ifdef ARTIC_R2_UPLOAD_FIRMWARE
 
+	// <arribada/horizon>
+
+	// Wait until the device's status register contains 85
+	// NOTE: This 85 value is undocumentated but can be seen in the supplied Artic_evalboard.py file
+	int retries = ARTIC_R2_BOOT_MAX_RETRIES;
+	do
+	{
+		delay(ARTIC_R2_BOOT_DELAY_MS);
+
+		// Read the DSP control register - check for the magic number
+		_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
+		digitalWrite(_cs, LOW);
+
+		uint8_t buffer[3]; // Buffer for the SPI data
+
+		_spiPort->transfer(ARTIC_R2_DSP_CRTL_REG_READ);
+		buffer[0] = _spiPort->transfer(0x00);
+		buffer[1] = _spiPort->transfer(0x00);
+		buffer[2] = _spiPort->transfer(0x00);
+
+		digitalWrite(_cs, HIGH);
+		_spiPort->endTransaction();
+/*
+		if (_printDebug == true)
+		{
+			_debugPort->print(F("begin: Reading DSP Control Register: 0x"));
+			if (buffer[0] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(buffer[0], HEX);
+			if (buffer[1] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(buffer[1], HEX);
+			if (buffer[2] < 0x10) _debugPort->print(F("0"));
+			_debugPort->println(buffer[2], HEX);
+		}
+*/
+		uint32_t ctrl_reg = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+		if (ctrl_reg == ARTIC_R2_DSP_CRTL_REG_MAGIC_NUMBER) // Does the control register contain the magic number?
+		{
+			if (_printDebug == true)
+				_debugPort->println(F("begin: DSP Control Register magic number seen!"));
+			break;
+		}
+
+		retries--;
+	}
+	while(retries >= 0);
+
+	if (retries < 0) // If we failed to see the magic number
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: DSP Control Register magic number not seen! Aborting..."));
+		return (false);
+	}
+
+	// </arribada/horizon>
+
+	// Datasheet suggests PMEM then XMEM then YMEM
+	// Arribada Horizon uploads XMEM then YMEM then PMEM
+
 	// Upload ARTIC firmware: PMEM
-	delay(100); // Wait 100ms
+	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
 
 	if (_printDebug == true)
-		_debugPort->println(F("Uploading ARTIC firmware: PMEM..."));
+		_debugPort->println(F("begin: uploading ARTIC firmware to PMEM..."));
 
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
+/*
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
+		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
+	}
+*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
-	delay(1);
+	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
 	digitalWrite(_cs, LOW);
@@ -113,27 +184,110 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
+/*
+		if ((_printDebug == true) && (addr == 0))
+		{
+			_debugPort->print(F("begin: value being written to PMEM address 0 is 0x"));
+			_debugPort->println(word, HEX);
+		}
+
+		if ((_printDebug == true) && (addr == 8000))
+		{
+			_debugPort->print(F("begin: value being written to PMEM address 8000 is 0x"));
+			_debugPort->println(word, HEX);
+		}
+*/
+		// Delay between words
+		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
+
+		// Extra delay between blocks
+		if (addr % ARTIC_R2_BURST_BLOCK_SIZE == 0)
+			delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
 	}
 
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	// Upload ARTIC firmware: XMEM
-	delay(10); // Wait 10ms
-
+	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+/*
+	// Sanity check: read back the 32-bit words from PMEM addresses 0 and 8000 to see if they were written correctly
 	if (_printDebug == true)
-		_debugPort->println(F("Uploading ARTIC firmware: XMEM..."));
+	{
+		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start of PMEM
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+		configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+		delayMicroseconds(_delay24cycles);
+
+		uint8_t pmemBuffer[4]; // Buffer for the PMEM data
+		uint8_t *ptr = pmemBuffer; // Pointer to the buffer
+
+		readMultipleWords(ptr, 32, 1); // Read exactly 1 32-bit word
+
+		_debugPort->print(F("begin: PMEM address 0 contains 0x"));
+		if (pmemBuffer[0] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[0], HEX);
+		if (pmemBuffer[1] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[1], HEX);
+		if (pmemBuffer[2] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[2], HEX);
+		if (pmemBuffer[3] < 0x10) _debugPort->print(F("0"));
+		_debugPort->println(pmemBuffer[3], HEX);
+
+		delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
+
+		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 8000;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+		configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+		delayMicroseconds(_delay24cycles);
+
+		readMultipleWords(ptr, 32, 1); // Read exactly 1 32-bit word
+
+		_debugPort->print(F("begin: PMEM address 8000 contains 0x"));
+		if (pmemBuffer[0] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[0], HEX);
+		if (pmemBuffer[1] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[1], HEX);
+		if (pmemBuffer[2] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(pmemBuffer[2], HEX);
+		if (pmemBuffer[3] < 0x10) _debugPort->print(F("0"));
+		_debugPort->println(pmemBuffer[3], HEX);
+
+		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+	}
+*/
+	// Upload ARTIC firmware: XMEM
+	if (_printDebug == true)
+		_debugPort->println(F("begin: uploading ARTIC firmware to XMEM..."));
 
 	burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
+/*
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
+		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
+	}
+*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
-	delay(1);
+	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
 	digitalWrite(_cs, LOW);
@@ -144,27 +298,106 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
+/*
+		if ((_printDebug == true) && (addr == 7000))
+		{
+			_debugPort->print(F("begin: value being written to XMEM address 7000 is 0x"));
+			_debugPort->println(word, HEX);
+		}
+
+		if ((_printDebug == true) && (addr == 10000))
+		{
+			_debugPort->print(F("begin: value being written to XMEM address 10000 is 0x"));
+			_debugPort->println(word, HEX);
+		}
+*/
+		// Delay between words
+		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
+
+		// Extra delay between blocks
+		if (addr % ARTIC_R2_BURST_BLOCK_SIZE == 0)
+			delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
 	}
 
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	// Upload ARTIC firmware: YMEM
-	delay(10); // Wait 10ms
-
+	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+/*
+	// Sanity check: read back the 32-bit words from XMEM addresses 7000 and 10000 to see if they were written correctly
 	if (_printDebug == true)
-		_debugPort->println(F("Uploading ARTIC firmware: YMEM..."));
+	{
+		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 7000;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+		configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+		delayMicroseconds(_delay24cycles);
+
+		uint8_t xmemBuffer[3]; // Buffer for the XMEM data
+		uint8_t *ptr = xmemBuffer; // Pointer to the buffer
+
+		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
+
+		_debugPort->print(F("begin: XMEM address 7000 contains 0x"));
+		if (xmemBuffer[0] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(xmemBuffer[0], HEX);
+		if (xmemBuffer[1] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(xmemBuffer[1], HEX);
+		if (xmemBuffer[2] < 0x10) _debugPort->print(F("0"));
+		_debugPort->println(xmemBuffer[2], HEX);
+
+		delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
+
+		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 10000;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+		configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+		delayMicroseconds(_delay24cycles);
+
+		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
+
+		_debugPort->print(F("begin: XMEM address 10000 contains 0x"));
+		if (xmemBuffer[0] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(xmemBuffer[0], HEX);
+		if (xmemBuffer[1] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(xmemBuffer[1], HEX);
+		if (xmemBuffer[2] < 0x10) _debugPort->print(F("0"));
+		_debugPort->println(xmemBuffer[2], HEX);
+
+		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+	}
+*/
+	// Upload ARTIC firmware: YMEM
+	if (_printDebug == true)
+		_debugPort->println(F("begin: uploading ARTIC firmware to YMEM..."));
 
 	burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_Y_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
+/*
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
+		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
+	}
+*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
-	delay(1);
+	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
 	digitalWrite(_cs, LOW);
@@ -175,21 +408,64 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
+/*
+		if ((_printDebug == true) && (addr == 600))
+		{
+			_debugPort->print(F("begin: value being written to YMEM address 600 is 0x"));
+			_debugPort->println(word, HEX);
+		}
+*/
+		// Delay between words
+		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
+
+		// Extra delay between blocks
+		if (addr % ARTIC_R2_BURST_BLOCK_SIZE == 0)
+			delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
 	}
 
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	// Activate the DSP
-	delay(10); // Wait 10ms
-
+	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+/*
+	// Sanity check: read back the 32-bit word from YMEM address 600 to see if it was written correctly
 	if (_printDebug == true)
-		_debugPort->println(F("Uploading ARTIC firmware: activating the DSP..."));
+	{
+		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 600;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_Y_MEMORY;
+		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+		configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+		delayMicroseconds(_delay24cycles);
+
+		uint8_t ymemBuffer[3]; // Buffer for the YMEM data
+		uint8_t *ptr = ymemBuffer; // Pointer to the buffer
+
+		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
+
+		_debugPort->print(F("begin: YMEM address 600 contains 0x"));
+		if (ymemBuffer[0] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(ymemBuffer[0], HEX);
+		if (ymemBuffer[1] < 0x10) _debugPort->print(F("0"));
+		_debugPort->print(ymemBuffer[1], HEX);
+		if (ymemBuffer[2] < 0x10) _debugPort->print(F("0"));
+		_debugPort->println(ymemBuffer[2], HEX);
+
+		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
+	}
+*/
+	// Activate the DSP
+	if (_printDebug == true)
+		_debugPort->println(F("begin: activating the DSP (writing 0 to the DSP control register)..."));
 
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
 	digitalWrite(_cs, LOW);
 
-	_spiPort->transfer(0x02);
+	_spiPort->transfer(ARTIC_R2_DSP_CRTL_REG_WRITE);
 	_spiPort->transfer(0x00);
 	_spiPort->transfer(0x00);
 	_spiPort->transfer(0x00);
@@ -204,22 +480,46 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT) && (digitalRead(_int1) == LOW))
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("Uploading ARTIC firmware: waiting for the ARTIC to boot..."));
+			_debugPort->println(F("begin: waiting for the ARTIC to boot (checking if INT1 has gone high)..."));
 		delay(100);
 	}
+
+	// With the ARTIC006 firmware, it seems to take up to 5 minutes for INT1 to go high.
+	// The datasheet suggests INT1 should go high after 250ms!
+	// So, I'm not quite sure what is happening... Maybe it is a feature of ARTIC006?
 
 	if ((millis() - bootStartTime) >= ARTIC_R2_BOOT_TIMEOUT)
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("Uploading ARTIC firmware: boot timed out!"));
-		return (false); // Boot timed out!
+			_debugPort->println(F("begin: boot timed out! INT1 did not go high! Carrying on regardless..."));
+		//return (false); // Boot timed out!
 	}
-
-	if(clearInterrupts(3) == false) // Clear both interrupts
+	else
 	{
+		// Print the firmware status - before we clear the interrupt pins
 		if (_printDebug == true)
-			_debugPort->println(F("Uploading ARTIC firmware: failed to clear interrupts!"));
-		return (false);
+		{
+			ARTIC_R2_Firmware_Status status;
+		  readStatusRegister(&status); // Read the ARTIC R2 status register
+		  _debugPort->println(F("begin: ARTIC R2 Firmware Status (before clearInterrupts):"));
+		  printFirmwareStatus(status, *_debugPort); // Pretty-print the firmware status
+		}
+
+		if(clearInterrupts(3) == false) // Clear both interrupts
+		{
+			if (_printDebug == true)
+				_debugPort->println(F("begin: failed to clear interrupts! Carrying on regardless..."));
+			//return (false);
+		}
+
+		// Print the firmware status - after clearing the interrupt pins
+		if (_printDebug == true)
+		{
+			ARTIC_R2_Firmware_Status status;
+		  readStatusRegister(&status); // Read the ARTIC R2 status register
+		  _debugPort->println(F("begin: ARTIC R2 Firmware Status (after clearInterrupts):"));
+		  printFirmwareStatus(status, *_debugPort); // Pretty-print the firmware status
+		}
 	}
 
 	// Read the checksum words
@@ -230,31 +530,35 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	if ((PMEM_CRC == ARTIC_R2_PMEM_CHECKSUM) && (XMEM_CRC == ARTIC_R2_XMEM_CHECKSUM) && (YMEM_CRC == ARTIC_R2_YMEM_CHECKSUM))
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("Uploading ARTIC firmware: checksums match"));
+			_debugPort->println(F("begin: checksums match! Firmware upload was successful."));
 		return (true);
 	}
 	else
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("Uploading ARTIC firmware: checksums do not match!"));
+			_debugPort->println(F("begin: checksums do not match! Firmware upload failed!"));
 		return (false);
 	}
 
 #else
 
 	// ARTIC boots from flash memory
-	delay(100); // Wait 100ms
+	delay(ARTIC_R2_BOOT_DELAY_MS);
 	unsigned long bootStartTime = millis();
 
 	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT) && (digitalRead(_int1) == LOW))
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("ARTIC is booting from flash..."));
+			_debugPort->println(F("begin: ARTIC is booting from flash (waiting for INT1 to go high)..."));
 		delay(100);
 	}
 
 	if ((millis() - bootStartTime) >= ARTIC_R2_FLASH_BOOT_TIMEOUT)
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: boot timed out!"));
 		return (false); // Boot timed out!
+	}
 
 	return (clearInterrupts(3)); // Clear both interrupts
 
@@ -306,16 +610,16 @@ boolean ARTIC_R2::setTXgain(int gain)
 		return (false);
 }
 
-// Enable power for the ARTIC R2 by pulling the power enable pin low
+// Enable power for the ARTIC R2
 void ARTIC_R2::enableARTICpower()
 {
-	digitalWrite(_pwr_en, LOW);
+	digitalWrite(_pwr_en, ARTIC_R2_PWR_EN_ON);
 }
 
-// Disable power for the ARTIC R2 by pulling the power enable pin high
+// Disable power for the ARTIC R2
 void ARTIC_R2::disableARTICpower()
 {
-	digitalWrite(_pwr_en, HIGH);
+	digitalWrite(_pwr_en, ARTIC_R2_PWR_EN_OFF);
 }
 
 // Read ARTIC R2 firmware status register
@@ -326,7 +630,8 @@ void ARTIC_R2::disableARTICpower()
 void ARTIC_R2::readStatusRegister(ARTIC_R2_Firmware_Status *status)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_FIRMWARE_STATUS_REGISTER;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_IO_MEMORY;
@@ -373,7 +678,8 @@ void ARTIC_R2::printFirmwareStatus(ARTIC_R2_Firmware_Status status, Stream &port
 void ARTIC_R2::readARGOSconfiguration(ARGOS_Configuration_Register *configuration)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_ARGOS_CONFIGURATION;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -458,7 +764,7 @@ void ARTIC_R2::configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode)
 	// Burstmode register address: 0b0000000
 	// Write: 0b0
 	// ARTIC_R2_Burstmode_Register: 24-bits
-	uint32_t fourBytes = burstmode.BURSTMODE_REGISTER & 0xFFFFFF;
+	uint32_t fourBytes = burstmode.BURSTMODE_REGISTER;
 
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
 	digitalWrite(_cs, LOW);
@@ -1026,10 +1332,11 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
 }
 
 // Read the firmware version from PMEM
-void ARTIC_R2::readFirmwareVersion(uint8_t *buffer)
+void ARTIC_R2::readFirmwareVersion(char *buffer)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_FIRMWARE_VERSION;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
@@ -1039,14 +1346,14 @@ void ARTIC_R2::readFirmwareVersion(uint8_t *buffer)
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
-	readMultipleWords(buffer, 32, 2); // Read 2 * 32-bit words
+	readMultipleWords((uint8_t *)buffer, 32, 2); // Read 2 * 32-bit words
 
-	buffer[8] = 0; // Null-terminate the string
+	buffer[8] = '\0'; // Null-terminate the string
 
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("Firmware version: "));
-		_debugPort->println(*buffer);
+		_debugPort->print(F("readFirmwareVersion: firmware version: "));
+		_debugPort->println(buffer);
 	}
 }
 
@@ -1054,7 +1361,8 @@ void ARTIC_R2::readFirmwareVersion(uint8_t *buffer)
 void ARTIC_R2::readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *YMEM_CRC)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_CRC_RESULTS;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1076,7 +1384,7 @@ void ARTIC_R2::readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *Y
 
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("Firmware checksum PMEM: 0x"));
+		_debugPort->print(F("readMemoryCRC: firmware checksum PMEM: 0x"));
 		_debugPort->print(*PMEM_CRC, HEX);
 		_debugPort->print(F("  XMEM: 0x"));
 		_debugPort->print(*XMEM_CRC, HEX);
@@ -1089,7 +1397,8 @@ void ARTIC_R2::readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *Y
 boolean ARTIC_R2::setRxTimeout(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_TIMEOUT;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1108,7 +1417,8 @@ boolean ARTIC_R2::setRxTimeout(uint32_t timeout_secs)
 uint32_t ARTIC_R2::readRxTimeout()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_TIMEOUT;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1130,7 +1440,8 @@ uint32_t ARTIC_R2::readRxTimeout()
 boolean ARTIC_R2::setSatelliteDetectionTimeout(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_SATELLITE_DETECTION_TIMEOUT;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1149,7 +1460,8 @@ boolean ARTIC_R2::setSatelliteDetectionTimeout(uint32_t timeout_secs)
 uint32_t ARTIC_R2::readSatelliteDetectionTimeout()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_SATELLITE_DETECTION_TIMEOUT;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1171,7 +1483,8 @@ uint32_t ARTIC_R2::readSatelliteDetectionTimeout()
 boolean ARTIC_R2::setTCXOWarmupTime(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TCXO_WARMUP_TIME;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1190,7 +1503,8 @@ boolean ARTIC_R2::setTCXOWarmupTime(uint32_t timeout_secs)
 uint32_t ARTIC_R2::readTCXOWarmupTime()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TCXO_WARMUP_TIME;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1212,7 +1526,8 @@ uint32_t ARTIC_R2::readTCXOWarmupTime()
 boolean ARTIC_R2::setTxCertificationInterval(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_CERTIFICATION_INTERVAL;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1231,7 +1546,8 @@ boolean ARTIC_R2::setTxCertificationInterval(uint32_t timeout_secs)
 uint32_t ARTIC_R2::readTxCertificationInterval()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_CERTIFICATION_INTERVAL;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1287,7 +1603,8 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 		tcxo_control.CONTROL_REGISTER_BITS.AUTO_DISABLE = 0;
 
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TCXO_CONTROL;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1311,7 +1628,8 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 float ARTIC_R2::readTCXOControlVoltage()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TCXO_CONTROL;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1345,7 +1663,8 @@ float ARTIC_R2::readTCXOControlVoltage()
 boolean ARTIC_R2::readTCXOAutoDisable()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TCXO_CONTROL;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1401,7 +1720,8 @@ boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 	}
 
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = mem_loc;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1417,7 +1737,8 @@ boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 
 	// Check that the frequency is correct by reading the value back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = mem_loc;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1441,7 +1762,8 @@ boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 boolean ARTIC_R2::enableRXCRC()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_ENABLE_CRC;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1457,7 +1779,8 @@ boolean ARTIC_R2::enableRXCRC()
 
 	// Check that the CRC is enabled by reading the value back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_ENABLE_CRC;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1482,7 +1805,8 @@ boolean ARTIC_R2::enableRXCRC()
 boolean ARTIC_R2::disableRXCRC()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_ENABLE_CRC;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1498,7 +1822,8 @@ boolean ARTIC_R2::disableRXCRC()
 
 	// Check that the CRC is disabled by reading the value back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_ENABLE_CRC;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1524,7 +1849,8 @@ boolean ARTIC_R2::disableRXCRC()
 boolean ARTIC_R2::enableRXTransparentMode()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_TRANSPARENT_MODE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1540,7 +1866,8 @@ boolean ARTIC_R2::enableRXTransparentMode()
 
 	// Check that transparent mode is enabled by reading the value back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_TRANSPARENT_MODE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1566,7 +1893,8 @@ boolean ARTIC_R2::enableRXTransparentMode()
 boolean ARTIC_R2::disableRXTransparentMode()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_TRANSPARENT_MODE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1582,7 +1910,8 @@ boolean ARTIC_R2::disableRXTransparentMode()
 
 	// Check that transparent mode is disabled by reading the value back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_TRANSPARENT_MODE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1607,7 +1936,8 @@ boolean ARTIC_R2::disableRXTransparentMode()
 boolean ARTIC_R2::clearAddressLUT()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1623,7 +1953,8 @@ boolean ARTIC_R2::clearAddressLUT()
 
 	// Check that the LUT is clear by reading the length back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1652,7 +1983,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	// Read the LUT Length
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1679,7 +2011,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 	}
 
 	// Write the new address to the LUT
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS + (tableLength << 1); // Calculate where to store the address
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1697,7 +2030,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	tableLength++; // Increment the table length by one
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1712,7 +2046,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	// Finally, read the LUT Length and check it was incremented correctly
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1775,7 +2110,8 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_PAYLOAD;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1953,7 +2289,8 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 boolean ARTIC_R2::setTxPayload()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1970,7 +2307,8 @@ boolean ARTIC_R2::setTxPayload()
 	int totalWords = ((int)_txPayloadLengthBits) / 24; // Convert bits to words
 	if ((((int)_txPayloadLengthBits) % 24) > 0) totalWords++; // Increment totalWords by 1 if there are any additional bits
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD + 1;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -1988,7 +2326,8 @@ boolean ARTIC_R2::setTxPayload()
 
 	// Read the encoded message length back again
 
-	burstmode.BURSTMODE_REGISTER = 0x000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
@@ -2084,7 +2423,7 @@ void ARTIC_R2::readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWor
 
 	for (int word = 0; word < numWords; word++)
 	{
-		for (int byteSize = 0; byteSize < (wordSizeInBits >> 4); byteSize++)
+		for (int byteSize = 0; byteSize < (wordSizeInBits >> 3); byteSize++)
 		{
 			buffer[bufferPointer++] = _spiPort->transfer(0xFF);
 		}

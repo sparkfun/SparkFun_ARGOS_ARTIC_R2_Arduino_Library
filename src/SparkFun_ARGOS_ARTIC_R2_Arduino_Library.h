@@ -31,8 +31,20 @@
 // SCLK is normally low (CPOL=0). Data is valid/latched on the falling SCLK edge (CPHA=1). So we need to use SPI MODE1.
 #define ARTIC_R2_SPI_MODE SPI_MODE1
 
+#define ARTIC_R2_PWR_EN_ON HIGH // Arribada Horizon: pull PWR_EN high to enable power
+#define ARTIC_R2_PWR_EN_OFF LOW // Arribada Horizon: pull PWR_EN low to disable power
+//#define ARTIC_R2_PWR_EN_ON LOW // SparkFun ARTIC R2 Breakout: pull PWR_EN low to enable power
+//#define ARTIC_R2_PWR_EN_OFF HIGH // SparkFun ARTIC R2 Breakout: pull PWR_EN high to disable power
+
 #define ARTIC_R2_FLASH_BOOT_TIMEOUT 2500 // ARTIC should boot in 2.25 secs. Timeout after 2500ms.
-#define ARTIC_R2_BOOT_TIMEOUT 500 // ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
+#define ARTIC_R2_BOOT_TIMEOUT 500 // Datasheet says ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
+//#define ARTIC_R2_BOOT_TIMEOUT 10000 // Arribada Horizon waits for up to 10 seconds
+#define ARTIC_R2_BOOT_DELAY_MS 1000 // Delay used when uploading firmware
+#define ARTIC_R2_BOOT_MAX_RETRIES 5 // Attempt to read the status register this many times when uploading firmware
+#define ARTIC_R2_BURST_INTER_WORD_DELAY_US 50 // Delay for this many microseconds between words during a write burst
+#define ARTIC_R2_BURST_BLOCK_SIZE 60 // Break burst data up into blocks of this size
+#define ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS 5 // Delay for this many milliseconds between blocks of words
+#define ARTIC_R2_BURST_FINISH_DELAY_MS 13 // Delay for this many milliseconds after a burst
 
 #define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
 
@@ -88,10 +100,12 @@ typedef struct {
 	union {
 		uint32_t BURSTMODE_REGISTER;
 		struct {
-			uint32_t BURSTMODE_START_ADDR	: 16; //Burstmode Start Address
-			uint32_t BURST_R_RW_MODE			: 1;
-			uint32_t BURST_MEM_SEL				: 2; // Burstmode memory select: 00: Program Memory; 01: X Memory; 10: Y Memory; 11: IO Memory
-			uint32_t BURST_MODE_ON				: 1;
+			uint32_t BURSTMODE_START_ADDR	  : 16; //Burstmode Start Address
+			uint32_t BURST_R_RW_MODE			  : 1;
+			uint32_t BURST_MEM_SEL				  : 2; // Burstmode memory select: 00: Program Memory; 01: X Memory; 10: Y Memory; 11: IO Memory
+			uint32_t BURST_MODE_ON				  : 1;
+			uint32_t                        : 4; // Reserved bits
+			uint32_t BURSTMODE_REG_SPI_ADDR : 8; // Burstmode register is write only and occupies address 0x00. Shift left by 1 bit and OR with 0 for writing = 0x00.
 		} BURSTMODE_REGISTER_BITS;
 	};
 } ARTIC_R2_Burstmode_Register;
@@ -222,6 +236,13 @@ typedef enum {
 const uint8_t CMD_CLEAR_INT_1 = 0x80; // Clear interrupt line 1
 const uint8_t CMD_CLEAR_INT_2 = 0xC0; // Clear interrupt line 2
 
+// SPI Standard Mode Addresses
+const uint8_t ARTIC_R2_BURSTMODE_REG_WRITE = 0x00; // Burstmode register is at address 0x00. Shift left by 1 bit and OR with 0 for writing = 0x00.
+const uint8_t ARTIC_R2_DSP_CRTL_REG_WRITE = 0x02; // DSP control register is at address 0x01. Shift left by 1 bit and OR with 0 for writing = 0x02.
+const uint8_t ARTIC_R2_DSP_CRTL_REG_READ = 0x03; // DSP control register is at address 0x01. Shift left by 1 bit and OR with 1 for reading = 0x03.
+
+const uint8_t ARTIC_R2_DSP_CRTL_REG_MAGIC_NUMBER = 85; // The DSP control register will contain this when it is ready for firmware upload
+
 // P Memory Locations
 const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
 
@@ -276,7 +297,8 @@ typedef struct {
 class ARTIC_R2
 {
 public:
-	boolean begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BOOTPin, uint8_t user_PWRENPin, uint8_t user_INT1Pin, uint8_t user_INT2Pin, uint8_t user_GAIN8Pin = -1, uint8_t user_GAIN16Pin = -1, uint32_t spiPortSpeed = 3000000, SPIClass &spiPort = SPI);
+	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
+	boolean begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BOOTPin, uint8_t user_PWRENPin, uint8_t user_INT1Pin, uint8_t user_INT2Pin, uint8_t user_GAIN8Pin = -1, uint8_t user_GAIN16Pin = -1, uint32_t spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -298,7 +320,7 @@ public:
 
 	boolean clearInterrupts(uint8_t interrupts = 3); // Clear one or both interrupts. Default to both.
 
-	void readFirmwareVersion(uint8_t *buffer); // Read the firmware version from PMEM
+	void readFirmwareVersion(char *buffer); // Read the firmware version from PMEM
 	void readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *YMEM_CRC); // Read the memories CRCs (after firmware boot)
 
 	boolean setRxTimeout(uint32_t timeout_secs = 0x0A); // Set the RX timeout (seconds). Default to 10.
