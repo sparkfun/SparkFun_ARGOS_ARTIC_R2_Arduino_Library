@@ -2,9 +2,14 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: September 25th 2020
+  Date: September 29th 2020
 
-  This example begins (initializes) the ARTIC and then reads and prints the firmware version.
+  This example begins (initializes) the ARTIC breakout. The pin numbers are passed to begin.
+  Begin takes take of setting the PWR_EN pin to enable power for the ARTIC.
+  Begin also controls the BOOT pin and downloads the firmware to the ARTIC.
+  Begin returns true if the firmware checksum is valid.
+
+  The ARTIC firmware version is read and printed to Serial.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -12,7 +17,7 @@
   Feel like supporting our work? Buy a board from SparkFun!
   https://www.sparkfun.com/products/
 
-  The ARTIC firmware takes up 127KB of program memory!
+  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
@@ -56,12 +61,16 @@ void setup()
 
   myARTIC.enableDebugging(); // Enable debug messages to Serial
 
+  //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages to Serial1 instead
+
   // Begin (initialize) the ARTIC
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {
     Serial.println(F("ARTIC R2 not detected. Freezing..."));
     while (1);
   }
+
+  Serial.println(F("ARTIC R2 boot was successful."));
 
   char buffer[9]; // Buffer to store the firmware version (8 bytes + NULL)
 

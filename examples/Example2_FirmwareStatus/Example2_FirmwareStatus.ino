@@ -6,7 +6,7 @@
 
   This example begins (initializes) the ARTIC breakout. The pin numbers are passed to begin.
   Begin takes take of setting the PWR_EN pin to enable power for the ARTIC.
-  Begin also controls the BOOT pin and downloads the formware to the ARTIC.
+  Begin also controls the BOOT pin and downloads the firmware to the ARTIC.
   Begin returns true if the firmware checksum is valid.
 
   The firmware status is read and printed to Serial.
@@ -63,12 +63,19 @@ void setup()
 
   myARTIC.enableDebugging(); // Enable debug messages to Serial
 
+  //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages to Serial1 instead
+
   // Begin (initialize) the ARTIC
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {
     Serial.println(F("ARTIC R2 not detected. Freezing..."));
     while (1);
   }
+
+  Serial.println(F("ARTIC R2 boot was successful."));
+  Serial.println();
+  Serial.println(F("Waiting for INT1 to go high... (This could take up to 5 minutes with ARTIC006 firmware!)"));
+  Serial.println();
 
   beginFinishedAt = millis(); // Record when .begin finished
 }
@@ -86,12 +93,12 @@ void loop()
 
   Serial.print(F("It has been "));
   Serial.print((millis() - beginFinishedAt) / 1000);
-  Serial.println(F(" seconds since .begin finished."));
+  Serial.println(F(" seconds since the ARTIC was booted."));
   Serial.println();
   
   if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when the RX offset calibration has completed.
   {
-    Serial.println(F("INT1 pin is high. ARTIC is ready! Freezing..."));
+    Serial.println(F("INT1 pin is high. ARTIC is ready! We are done. Freezing..."));
     while (1)
       ; // Do nothing more
   }

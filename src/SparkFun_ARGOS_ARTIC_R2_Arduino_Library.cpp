@@ -4,7 +4,7 @@
   Do you like this library? Help support SparkFun. Buy a board!
   https://www.sparkfun.com/products/
 
-  Written by Paul Clark, August 17th 2020
+  Written by Paul Clark, September 29th 2020
 
   The ARGOS ARTIC R2 chipset allows you to send and receive short data messages via the
 	ARGOS satellite system.
@@ -18,7 +18,7 @@
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 	See the LICENSE.md for more details.
 
-	Parts of this library were inspired by the Arribada Horizon bio-logging platform:
+	Parts of this library were inspired by or based on the Arribada Horizon bio-logging platform:
 	https://github.com/arribada/horizon
 	Arribada's work is gratefully acknowledged.
 
@@ -40,7 +40,7 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay based on the clock speed
 	_delay24cycles++; // Round up by 1
 
-	_instructionInProgress = 0; // Clear _instructionInProgress
+	_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Clear _instructionInProgress
 
 	// Mandatory pins
 	_cs = user_CSPin;
@@ -556,11 +556,36 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	if ((millis() - bootStartTime) >= ARTIC_R2_FLASH_BOOT_TIMEOUT)
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("begin: boot timed out!"));
-		return (false); // Boot timed out!
+			_debugPort->println(F("begin: boot timed out!  Carrying on regardless..."));
+		//return (false); // Boot timed out!
 	}
 
-	return (clearInterrupts(3)); // Clear both interrupts
+	// Print the firmware status - before we clear the interrupt pins
+	if (_printDebug == true)
+	{
+		ARTIC_R2_Firmware_Status status;
+		readStatusRegister(&status); // Read the ARTIC R2 status register
+		_debugPort->println(F("begin: ARTIC R2 Firmware Status (before clearInterrupts):"));
+		printFirmwareStatus(status, *_debugPort); // Pretty-print the firmware status
+	}
+
+	if(clearInterrupts(3) == false) // Clear both interrupts
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: failed to clear interrupts! Carrying on regardless..."));
+		//return (false);
+	}
+
+	// Print the firmware status - after clearing the interrupt pins
+	if (_printDebug == true)
+	{
+		ARTIC_R2_Firmware_Status status;
+		readStatusRegister(&status); // Read the ARTIC R2 status register
+		_debugPort->println(F("begin: ARTIC R2 Firmware Status (after clearInterrupts):"));
+		printFirmwareStatus(status, *_debugPort); // Pretty-print the firmware status
+	}
+
+	return (true);
 
 #endif
 }
@@ -583,31 +608,43 @@ boolean ARTIC_R2::setTXgain(int gain)
 		{
 			digitalWrite(_gain8, HIGH);
 			digitalWrite(_gain16, HIGH);
+			if (_printDebug == true)
+				_debugPort->println(F("setTXgain: gain set to 0"));
 			return (true);
 		}
 		else if (gain == 8)
 		{
 			digitalWrite(_gain8, LOW);
 			digitalWrite(_gain16, HIGH);
+			if (_printDebug == true)
+				_debugPort->println(F("setTXgain: gain set to 8"));
 			return (true);
 		}
 		else if (gain == 16)
 		{
 			digitalWrite(_gain8, HIGH);
 			digitalWrite(_gain16, LOW);
+			if (_printDebug == true)
+				_debugPort->println(F("setTXgain: gain set to 16"));
 			return (true);
 		}
 		else if (gain == 24)
 		{
 			digitalWrite(_gain8, LOW);
 			digitalWrite(_gain16, LOW);
+			if (_printDebug == true)
+				_debugPort->println(F("setTXgain: gain set to 24"));
 			return (true);
 		}
 		else
 			return (false);
 	}
 	else
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("setTXgain: _gain8 and _gain16 pins are not defined! Unable to set the TX gain!"));
 		return (false);
+	}
 }
 
 // Enable power for the ARTIC R2
@@ -646,32 +683,34 @@ void ARTIC_R2::readStatusRegister(ARTIC_R2_Firmware_Status *status)
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	status->STATUS_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
 }
 
 // Pretty-print the firmware status to port
 void ARTIC_R2::printFirmwareStatus(ARTIC_R2_Firmware_Status status, Stream &port)
 {
-	if (status.STATUS_REGISTER_BITS.IDLE) port.println(F("The firmware is idle and ready to accept commands."));
-	if (status.STATUS_REGISTER_BITS.RX_IN_PROGRESS) port.println(F("The firmware is receiving."));
-	if (status.STATUS_REGISTER_BITS.TX_IN_PROGRESS) port.println(F("The firmware is transmitting."));
-	if (status.STATUS_REGISTER_BITS.BUSY) port.println(F("The firmware is busy changing state."));
-	if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) port.println(F("A message has been received."));
-	if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) port.println(F("A satellite has been detected."));
-	if (status.STATUS_REGISTER_BITS.TX_FINISHED) port.println(F("The transmission was completed."));
-	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED) port.println(F("The configuration command has been accepted."));
-	if (status.STATUS_REGISTER_BITS.CRC_CALCULATED) port.println(F("The CRC calculation has finished."));
-	if (status.STATUS_REGISTER_BITS.IDLE_STATE) port.println(F("The firmware has returned to the idle state."));
-	if (status.STATUS_REGISTER_BITS.RX_CALIBRATION_FINISHED) port.println(F("The RX offset calibration has completed."));
-	if (status.STATUS_REGISTER_BITS.RX_TIMEOUT) port.println(F("The specified reception time has been exceeded."));
-	if (status.STATUS_REGISTER_BITS.SATELLITE_TIMEOUT) port.println(F("No satellite was detected within the specified time."));
-	if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) port.println(F("A received message is lost. No buffer space left."));
-	if (status.STATUS_REGISTER_BITS.TX_INVALID_MESSAGE) port.println(F("Incorrect TX payload length specified."));
-	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED) port.println(F("Incorrect command sent or firmware is not in idle."));
-	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW) port.println(F("Previous command was not yet processed."));
-	if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR) port.println(F("An internal error has occurred."));
-	if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) port.println(F("Interrupt pin 1 is high."));
-	if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) port.println(F("Interrupt pin 2 is high."));
+	if (status.STATUS_REGISTER_BITS.IDLE) port.println(F("The firmware status IDLE flag is set. The firmware is idle and ready to accept commands."));
+	if (status.STATUS_REGISTER_BITS.RX_IN_PROGRESS) port.println(F("The firmware status RX_IN_PROGRESS flag is set. The firmware is receiving."));
+	if (status.STATUS_REGISTER_BITS.TX_IN_PROGRESS) port.println(F("The firmware status TX_IN_PROGRESS flag is set. The firmware is transmitting."));
+	if (status.STATUS_REGISTER_BITS.BUSY) port.println(F("The firmware status BUSY flag is set. The firmware is busy changing state."));
+	if (status.STATUS_REGISTER_BITS.RX_VALID_MESSAGE) port.println(F("The firmware status RX_VALID_MESSAGE flag is set. A message has been received."));
+	if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) port.println(F("The firmware status RX_SATELLITE_DETECTED flag is set. A satellite has been detected."));
+	if (status.STATUS_REGISTER_BITS.TX_FINISHED) port.println(F("The firmware status TX_FINISHED flag is set. The transmission was completed."));
+	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED) port.println(F("The firmware status MCU_COMMAND_ACCEPTED flag is set. The configuration command has been accepted."));
+	if (status.STATUS_REGISTER_BITS.CRC_CALCULATED) port.println(F("The firmware status CRC_CALCULATED flag is set. The CRC calculation has finished."));
+	if (status.STATUS_REGISTER_BITS.IDLE_STATE) port.println(F("The firmware status IDLE_STATE flag is set. The firmware has returned to the idle state."));
+	if (status.STATUS_REGISTER_BITS.RX_CALIBRATION_FINISHED) port.println(F("The firmware status RX_CALIBRATION_FINISHED flag is set. The RX offset calibration has completed."));
+	if (status.STATUS_REGISTER_BITS.RX_TIMEOUT) port.println(F("The firmware status RX_TIMEOUT flag is set. The specified reception time has been exceeded."));
+	if (status.STATUS_REGISTER_BITS.SATELLITE_TIMEOUT) port.println(F("The firmware status SATELLITE_TIMEOUT flag is set. No satellite was detected within the specified time."));
+	if (status.STATUS_REGISTER_BITS.RX_BUFFER_OVERFLOW) port.println(F("The firmware status RX_BUFFER_OVERFLOW flag is set. A received message is lost. No buffer space left."));
+	if (status.STATUS_REGISTER_BITS.TX_INVALID_MESSAGE) port.println(F("The firmware status TX_INVALID_MESSAGE flag is set. Incorrect TX payload length specified."));
+	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED) port.println(F("The firmware status MCU_COMMAND_REJECTED flag is set. Incorrect command sent or firmware is not in idle."));
+	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW) port.println(F("The firmware status MCU_COMMAND_OVERFLOW flag is set. Previous command was not yet processed."));
+	if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR) port.println(F("The firmware status INTERNAL_ERROR flag is set. An internal error has occurred."));
+	if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) port.println(F("The firmware status DSP2MCU_INT1 flag is set. Interrupt pin 1 is high."));
+	if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) port.println(F("The firmware status DSP2MCU_INT2 flag is set. Interrupt pin 2 is high."));
 }
 
 // Read ARTIC R2 ARGOS configuration register
@@ -693,6 +732,8 @@ void ARTIC_R2::readARGOSconfiguration(ARGOS_Configuration_Register *configuratio
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
 
 	configuration->CONFIGURATION_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
 }
@@ -786,7 +827,7 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t command)
 	// Check that the command is valid
 	if((command != CONFIG_CMD_SET_ARGOS_3_RX_MODE) &&
 		(command != CONFIG_CMD_SET_ARGOS_3_RX_BACKUP_MODE) &&
-		//(command != CONFIG_CMD_SET_ARGOS_4_RX_MODE) &&  // Unsupported by ARTIC006 ?! TO DO: Check this!
+		//(command != CONFIG_CMD_SET_ARGOS_4_RX_MODE) &&  // Unsupported by ARTIC006! Use ARGOS 3 RX.
 		(command != CONFIG_CMD_SET_PTT_A2_TX_MODE) &&
 		(command != CONFIG_CMD_SET_PTT_A3_TX_MODE) &&
 		(command != CONFIG_CMD_SET_PTT_ZE_TX_MODE) &&
@@ -816,7 +857,7 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t command)
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles *** TO DO: Check if this needs to be extended! ***
+	delay(ARTIC_R2_CONFIGURATION_DELAY_MS);
 
 	readStatusRegister(&status); // Read the status register again
 
@@ -858,6 +899,9 @@ void ARTIC_R2::printCommandResult(ARTIC_R2_MCU_Command_Result result, Stream &po
 		case ARTIC_R2_MCU_COMMAND_INVALID:
 			port.println(F("MCU command result: INVALID! (MCU command was invalid / not recognized)"));
 			break;
+		case ARTIC_R2_MCU_COMMAND_VALID:
+			port.println(F("MCU command result: valid. A valid housekeeping command was attempted."));
+			break;
 		case ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS:
 			port.print(F("MCU command result: fail! "));
 			if (_instructionInProgress == INST_START_CONTINUOUS_RECEPTION)
@@ -889,6 +933,16 @@ void ARTIC_R2::printCommandResult(ARTIC_R2_MCU_Command_Result result, Stream &po
 // Send an MCU Instruction
 // Write a single 8-bit instruction
 // Return the result
+//
+// Notes: We know that configuration commands cause the MCU_COMMAND_ACCEPTED,
+//        MCU_COMMAND_REJECTED and MCU_COMMAND_OVERFLOW flags to be set. But
+//        it is unclear if MCU instructions use the same flags.
+//        At present, it looks like the firmware status instead goes BUSY (changing state)
+//        and then changes to (e.g.) RX_IN_PROGRESS (for satellite detection and message receive).
+//        So, E.g.:
+//          this function will return true if either BUSY or TX_IN_PROGRESS are raised
+//          after starting reception or satellite detection
+//
 ARTIC_R2_MCU_Command_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction)
 {
 	// Check that the instruction is valid
@@ -930,43 +984,121 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendMCUinstruction(uint8_t instruction)
 	digitalWrite(_cs, HIGH);
 	_spiPort->endTransaction();
 
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles *** TO DO: Check if this needs to be extended! ***
+	delay(ARTIC_R2_INSTRUCTION_DELAY_MS); // Delay before reading the status
 
 	readStatusRegister(&status); // Read the status register again
 
-	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED)
+	if ((instruction == INST_START_CONTINUOUS_RECEPTION) ||
+		(instruction == INST_START_RECEIVING_1_MESSAGE) ||
+		(instruction == INST_START_RECEIVING_2_MESSAGES) ||
+		(instruction == INST_START_RECEPTION_FOR_FIXED_TIME) ||
+		(instruction == INST_SATELLITE_DETECTION))
 	{
-		_instructionInProgress = instruction; // Update _instructionInProgress
-		return ARTIC_R2_MCU_COMMAND_ACCEPTED;
+		if ((status.STATUS_REGISTER_BITS.BUSY) || (status.STATUS_REGISTER_BITS.RX_IN_PROGRESS))
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress
+			return ARTIC_R2_MCU_COMMAND_ACCEPTED;
+		}
+		else if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR)
+		{
+			_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Update _instructionInProgress (assume failure!)
+			return ARTIC_R2_MCU_COMMAND_REJECTED;
+		}
+		else
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress (assume success!?)
+			return ARTIC_R2_MCU_COMMAND_VALID;
+		}
 	}
-	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
+	else if ((instruction == INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) ||
+		(instruction == INST_TRANSMIT_ONE_PACKAGE_AND_START_RX))
 	{
-		// Leave _instructionInProgress unmodified?
-		return ARTIC_R2_MCU_COMMAND_REJECTED;
+		if ((status.STATUS_REGISTER_BITS.BUSY) || (status.STATUS_REGISTER_BITS.TX_IN_PROGRESS))
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress
+			return ARTIC_R2_MCU_COMMAND_ACCEPTED;
+		}
+		else if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR)
+		{
+			_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Update _instructionInProgress (assume failure!)
+			return ARTIC_R2_MCU_COMMAND_REJECTED;
+		}
+		else
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress (assume success!?)
+			return ARTIC_R2_MCU_COMMAND_VALID;
+		}
 	}
-	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
+	else if (instruction == INST_GO_TO_IDLE)
 	{
-		// Leave _instructionInProgress unmodified?
-		return ARTIC_R2_MCU_COMMAND_OVERFLOW;
+		if ((status.STATUS_REGISTER_BITS.BUSY) || (status.STATUS_REGISTER_BITS.IDLE_STATE))
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress
+			return ARTIC_R2_MCU_COMMAND_ACCEPTED;
+		}
+		else if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR)
+		{
+			_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Update _instructionInProgress (assume failure!)
+			return ARTIC_R2_MCU_COMMAND_REJECTED;
+		}
+		else
+		{
+			_instructionInProgress = instruction; // Update _instructionInProgress (assume success!?)
+			return ARTIC_R2_MCU_COMMAND_VALID;
+		}
 	}
 	else
 	{
-		// Leave _instructionInProgress unmodified?
-		return ARTIC_R2_MCU_COMMAND_UNCERTAIN; // Hopefully this is impossible?
+		_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Update _instructionInProgress (assume failure!)
+		return ARTIC_R2_MCU_COMMAND_INVALID; // Hopefully this is impossible?
 	}
+}
+
+// Send an MCU Housekeeping Command (i.e. Clear Interrupt)
+// Write a single 8-bit command
+ARTIC_R2_MCU_Command_Result ARTIC_R2::sendHousekeepingCommand(uint8_t command)
+{
+	// Check that the command is valid
+	if((command != CMD_CLEAR_INT_1) &&
+		(command != CMD_CLEAR_INT_2))
+		return ARTIC_R2_MCU_COMMAND_INVALID; // Command is invalid
+
+	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
+
+	if (_printDebug == true)
+	{
+		readStatusRegister(&status);
+		if (!status.STATUS_REGISTER_BITS.IDLE) // If the firmware is not idle
+		{
+			_debugPort->println(F("sendHousekeepingCommand: ARTIC is not idle. This will probably fail."));
+		}
+	}
+
+	// Write 8 bits to SPI:
+	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
+	digitalWrite(_cs, LOW);
+
+	_spiPort->transfer(command);
+
+	digitalWrite(_cs, HIGH);
+	_spiPort->endTransaction();
+
+	delay(ARTIC_R2_HOUSEKEEPING_DELAY_MS); // Delay before reading the status
+
+	return (ARTIC_R2_MCU_COMMAND_VALID);
 }
 
 // Check the MCU instruction progress. Return true if the instruction is complete.
 boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress *progress)
 {
-	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
+	ARTIC_R2_Firmware_Status status; // Read the status register
 	readStatusRegister(&status);
 
 	// TO DO: Work out how to handle INTERNAL_ERROR. Maybe like this?
 	if (status.STATUS_REGISTER_BITS.INTERNAL_ERROR)
 	{
 		*progress = ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR;
-		return true; // Return truw to indicate the instruction is 'complete'?
+		return true; // Return true to indicate the instruction is 'complete'?
 	}
 
 	switch (_instructionInProgress)
@@ -1168,30 +1300,54 @@ boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress 
 			}
 			break;
 		case INST_SATELLITE_DETECTION:
+/*
+	Note: here is what a satellite detection timeout looks like with ARTIC006 firmware:
+	===================================================================================
+
+	ARTIC R2 Firmware Status:
+	The firmware status RX_IN_PROGRESS flag is set. The firmware is receiving.
+
+	ARTIC R2 instruction progress:
+	MCU Instruction Progress: Satellite Detection in progress.
+
+	ARTIC R2 Firmware Status:
+	The firmware status IDLE flag is set. The firmware is idle and ready to accept commands.
+	The firmware status IDLE_STATE flag is set. The firmware has returned to the idle state.
+	The firmware status SATELLITE_TIMEOUT flag is set. No satellite was detected within the specified time.
+	The firmware status DSP2MCU_INT1 flag is set. Interrupt pin 1 is high.
+	The firmware status DSP2MCU_INT2 flag is set. Interrupt pin 2 is high.
+	INT1 pin is high. Satellite detected!
+	INT2 pin is high. Satellite detection has timed out!
+
+	ARTIC R2 instruction progress:
+	MCU Instruction Progress: Satellite Detection is complete. Reception timed out.
+
+*/
 			if (status.STATUS_REGISTER_BITS.SATELLITE_TIMEOUT) // Has detection timed out?
 			{
-				if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Did we detect a satellite
-				{
-					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED;
-					return true; // We're done. Rx timed out.
-				}
-				else
+				// if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Did we detect a satellite
+				// {
+				// 	*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED;
+				// 	return true; // We're done. Rx timed out. Note: this state may be impossible to reach. Status seems to go IDLE as soon as a satellite is detected.
+				// }
+				// else
 				{
 					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT;
+					// Note: both INT2 and INT1 will be high. INT1 should be ignored...
 					return true; // We're done. Rx timed out.
 				}
 			}
 			else
 			{
-				if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Have we detected a satellite
+				if (status.STATUS_REGISTER_BITS.RX_SATELLITE_DETECTED) // Have we detected a satellite?
 				{
 					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED;
-					return false; // We may not be done? Maybe Rx continues until it times out? TO DO: check this!
+					return true; // We are done. Status seems to never time out once a satellite has been detected. It goes IDLE instead.
 				}
 				else
 				{
 					*progress = ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION;
-					return false; // We're not done.
+					return false; // We are not done.
 				}
 			}
 			break;
@@ -1316,9 +1472,9 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
 	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT:
   	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out."));
 		break;
-	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED:
-  	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out. A satellite was detected."));
-		break;
+	// case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED:
+  // 	port.println(F("MCU Instruction Progress: Satellite Detection is complete. Reception timed out. A satellite was detected."));
+	// 	break;
 	case ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR:
 		port.println(F("MCU Instruction Progress: INTERNAL ERROR!"));
 		break;
@@ -1331,7 +1487,7 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
 	}
 }
 
-// Read the firmware version from PMEM
+// Read and return the firmware version from PMEM
 void ARTIC_R2::readFirmwareVersion(char *buffer)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1347,6 +1503,8 @@ void ARTIC_R2::readFirmwareVersion(char *buffer)
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	readMultipleWords((uint8_t *)buffer, 32, 2); // Read 2 * 32-bit words
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
 
 	buffer[8] = '\0'; // Null-terminate the string
 
@@ -1377,6 +1535,8 @@ void ARTIC_R2::readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *Y
 
 	readMultipleWords(ptr, 24, 3); // Read 3 * 24-bit words
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	// Extract the checksums
 	*PMEM_CRC = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 	*XMEM_CRC = (((uint32_t)buffer[3]) << 16) | (((uint32_t)buffer[4]) << 8) | ((uint32_t)buffer[5]);
@@ -1394,6 +1554,7 @@ void ARTIC_R2::readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *Y
 }
 
 // Set the RX timeout (seconds)
+// Returns true if the timeout was set successfully
 boolean ARTIC_R2::setRxTimeout(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1413,7 +1574,7 @@ boolean ARTIC_R2::setRxTimeout(uint32_t timeout_secs)
 	return (readRxTimeout() == timeout_secs);
 }
 
-// Read the RX timeout (seconds)
+// Read and return the RX timeout (seconds)
 uint32_t ARTIC_R2::readRxTimeout()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1433,10 +1594,13 @@ uint32_t ARTIC_R2::readRxTimeout()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	return (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the rx timeout
 }
 
 // Set the satellite detection timeout (seconds)
+// Returns true if the timeout was set successfully
 boolean ARTIC_R2::setSatelliteDetectionTimeout(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1456,7 +1620,7 @@ boolean ARTIC_R2::setSatelliteDetectionTimeout(uint32_t timeout_secs)
 	return (readSatelliteDetectionTimeout() == timeout_secs);
 }
 
-// Read the satellite detection timeout
+// Read and return the satellite detection timeout
 uint32_t ARTIC_R2::readSatelliteDetectionTimeout()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1476,10 +1640,13 @@ uint32_t ARTIC_R2::readSatelliteDetectionTimeout()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	return (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the satellite detection timeout
 }
 
 // Set the TCXO warm up time (seconds)
+// Returns true if the warm up time was set successfully
 boolean ARTIC_R2::setTCXOWarmupTime(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1499,7 +1666,7 @@ boolean ARTIC_R2::setTCXOWarmupTime(uint32_t timeout_secs)
 	return (readTCXOWarmupTime() == timeout_secs);
 }
 
-// Read the TCXO warm up time
+// Read and return the TCXO warm up time
 uint32_t ARTIC_R2::readTCXOWarmupTime()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1519,10 +1686,13 @@ uint32_t ARTIC_R2::readTCXOWarmupTime()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	return (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the TCXO warm up time
 }
 
 // Set the TX certification interval
+// Returns true if the interval was set successfully
 boolean ARTIC_R2::setTxCertificationInterval(uint32_t timeout_secs)
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1542,7 +1712,7 @@ boolean ARTIC_R2::setTxCertificationInterval(uint32_t timeout_secs)
 	return (readTxCertificationInterval() == timeout_secs);
 }
 
-// Read the TX certification interval
+// Read and return the TX certification interval
 uint32_t ARTIC_R2::readTxCertificationInterval()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1562,10 +1732,13 @@ uint32_t ARTIC_R2::readTxCertificationInterval()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	return (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the TX certification interval
 }
 
 // Set the TCXO control voltage and auto-disable
+// Returns true if the values were set successfully
 boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 {
 	if ((voltage < 1.3) || ((voltage > 2.7) && (voltage < 3.3)) || (voltage > 3.3))
@@ -1618,13 +1791,12 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 
 	// Read the new values
 	float new_voltage = readTCXOControlVoltage();
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 	boolean new_disable = readTCXOAutoDisable();
 
 	return ((new_voltage == voltage) && (new_disable == autoDisable));
 }
 
-// Read the TCXO control voltage. Auto-disable is ignored.
+// Read and return the TCXO control voltage. Auto-disable is ignored.
 float ARTIC_R2::readTCXOControlVoltage()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1644,6 +1816,8 @@ float ARTIC_R2::readTCXOControlVoltage()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	TCXO_Control_Register tcxo_control;
 	tcxo_control.TCXO_CONTROL_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
 
@@ -1659,7 +1833,7 @@ float ARTIC_R2::readTCXOControlVoltage()
 	}
 }
 
-// Read the TCXO auto-disable bit
+// Read and return the TCXO auto-disable bit
 boolean ARTIC_R2::readTCXOAutoDisable()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1679,6 +1853,8 @@ boolean ARTIC_R2::readTCXOAutoDisable()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	TCXO_Control_Register tcxo_control;
 	tcxo_control.TCXO_CONTROL_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
 
@@ -1689,18 +1865,21 @@ boolean ARTIC_R2::readTCXOAutoDisable()
 }
 
 // Set the ARGOS 2/3 TX Frequency
+// Returns true if the frequency was set correctly in XMEM
 boolean ARTIC_R2::setARGOS23TxFrequency(float freq_MHz)
 {
 	return setARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_2_3, freq_MHz);
 }
 
 // Set the ARGOS 4 TX Frequency
+// Returns true if the frequency was set correctly in XMEM
 boolean ARTIC_R2::setARGOS4TxFrequency(float freq_MHz)
 {
 	return setARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_4, freq_MHz);
 }
 
 // Set the ARGOS TX Frequency using the equation defined in section 3.5.3 of the ARTIC R2 datasheet
+// Returns true if the frequency was set correctly in XMEM
 boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 {
 	double fractional_part = (double)freq_MHz; // Convert freq to double
@@ -1713,7 +1892,7 @@ boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("setARGOSTxFrequency: setting memory location 0x"));
+		_debugPort->print(F("setARGOSTxFrequency: setting XMEM location 0x"));
 		_debugPort->print(mem_loc, HEX);
 		_debugPort->print(F(" to 0x"));
 		_debugPort->println(round, HEX);
@@ -1753,12 +1932,76 @@ boolean ARTIC_R2::setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz)
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	uint32_t new_val = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
 	return (new_val == round);
 }
 
+// Get the ARGOS 2/3 TX Frequency
+// Returns the TX Frequency in MHz
+float ARTIC_R2::getARGOS23TxFrequency()
+{
+	return getARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_2_3);
+}
+
+// Set the ARGOS 4 TX Frequency
+// Returns the TX Frequency in MHz
+float ARTIC_R2::getARGOS4TxFrequency()
+{
+	return getARGOSTxFrequency(MEM_LOC_TX_FREQ_ARGOS_4);
+}
+
+// Get the ARGOS TX Frequency using the equation defined in section 3.5.3 of the ARTIC R2 datasheet
+// Returns the frequency in MHz as float
+float ARTIC_R2::getARGOSTxFrequency(uint16_t mem_loc)
+{
+	// Read the TX frequency from memory
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = mem_loc;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	uint32_t round = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+	double fractional_part = (double)round; // Convert to double
+
+	fractional_part /= 4194304; // Divide by 2^22
+	fractional_part += 61; // Add 61
+	fractional_part *= 26; // Multiply by 26 (MHz)
+	fractional_part /= 4; // Divide by 4
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("getARGOSTxFrequency: XMEM location 0x"));
+		_debugPort->print(mem_loc, HEX);
+		_debugPort->print(F(" contains 0x"));
+		_debugPort->print(round, HEX);
+		_debugPort->print(F(" which equals "));
+		_debugPort->print((float)fractional_part, 3);
+		_debugPort->println(F(" MHz"));
+	}
+
+	return ((float)fractional_part);
+}
+
 // Enable the RX CRC check by writing 0x000001 to MEM_LOC_RX_FILTERING_ENABLE_CRC
+// Returns true if the CRC check was enabled successfully
 boolean ARTIC_R2::enableRXCRC()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1795,6 +2038,8 @@ boolean ARTIC_R2::enableRXCRC()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	if (buffer[2] == 0x01)
 		return (true);
 	else
@@ -1802,6 +2047,7 @@ boolean ARTIC_R2::enableRXCRC()
 }
 
 // Disable the RX CRC check by writing 0x000000 to MEM_LOC_RX_FILTERING_ENABLE_CRC
+// Returns true if the CRC check was successfully disabled
 boolean ARTIC_R2::disableRXCRC()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1838,7 +2084,38 @@ boolean ARTIC_R2::disableRXCRC()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	if (buffer[2] == 0x00)
+		return (true);
+	else
+		return (false);
+}
+
+// Check if the RX CRC is enabled by reading MEM_LOC_RX_FILTERING_ENABLE_CRC
+// Returns true if the CRC check is enabled
+boolean ARTIC_R2::isRXCRCenabled()
+{
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_ENABLE_CRC;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	if (buffer[2] == 0x01)
 		return (true);
 	else
 		return (false);
@@ -1846,6 +2123,7 @@ boolean ARTIC_R2::disableRXCRC()
 
 // Enable the RX transparent mode by writing 0x000001 to MEM_LOC_RX_FILTERING_TRANSPARENT_MODE
 // All messages are send to the MCU.
+// Returns true if transparent mode was successfully enabled.
 boolean ARTIC_R2::enableRXTransparentMode()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1882,6 +2160,8 @@ boolean ARTIC_R2::enableRXTransparentMode()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	if (buffer[2] == 0x01)
 		return (true);
 	else
@@ -1890,6 +2170,7 @@ boolean ARTIC_R2::enableRXTransparentMode()
 
 // Disable the RX transparent mode by writing 0x000000 to MEM_LOC_RX_FILTERING_TRANSPARENT_MODE
 // Only messages with an ID mentioned in the Address LUT are sent to the MCU.
+// Returns true if transparent mode was successfully disabled.
 boolean ARTIC_R2::disableRXTransparentMode()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1926,13 +2207,44 @@ boolean ARTIC_R2::disableRXTransparentMode()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	if (buffer[2] == 0x00)
 		return (true);
 	else
 		return (false);
 }
 
+// Read and return MEM_LOC_RX_FILTERING_TRANSPARENT_MODE
+boolean ARTIC_R2::isRXTransparentModeEnabled()
+{
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_TRANSPARENT_MODE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	if (buffer[2] == 0x01)
+		return (true);
+	else
+		return (false);
+}
+
 // Clear the address LUT by writing 0x000000 to MEM_LOC_RX_FILTERING_LUT_LENGTH
+// Returns true if the LUT length was successfully set to zero.
 boolean ARTIC_R2::clearAddressLUT()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -1969,6 +2281,8 @@ boolean ARTIC_R2::clearAddressLUT()
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	if (buffer[2] == 0x00)
 		return (true);
 	else
@@ -1976,34 +2290,17 @@ boolean ARTIC_R2::clearAddressLUT()
 }
 
 // Add a new address (platform ID) to the message filtering LUT
+// Returns true if the address was added successfully.
+// Will return false if the table is full.
 boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 {
 	uint32_t AddressLSBits = platformID & 0xFFFFFF; // Extract the 24 LS bits
-	uint32_t AddressMSBits = platformID >> 24; // Extract the 8 MS bits
+	uint32_t AddressMSBits = (platformID >> 24) & 0x0F; // Extract the 4 MS bits (platform ID is 28 bits, not 32)
 
 	// Read the LUT Length
-	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
-	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+	uint32_t tableLength = (uint32_t)getAddressLUTlength();
 
-	configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-	uint8_t buffer[3]; // Buffer for the SPI data
-	uint8_t *ptr = buffer; // Pointer to the buffer
-
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
-
-	readMultipleWords(ptr, 24, 1); // Read the LUT length
-
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
-
-	uint32_t tableLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
-
-	if (tableLength > 49)
+	if (tableLength >= ARTIC_R2_MAX_ADDRESS_LUT_LENGTH)
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("addAddressToLUT: address table is full!"));
@@ -2011,9 +2308,10 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 	}
 
 	// Write the new address to the LUT
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS + (tableLength << 1); // Calculate where to store the address
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS + (tableLength << 1); // Calculate where to store the address (each entry occupies two words)
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
@@ -2055,11 +2353,14 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
-	ptr = buffer; // Pointer to the buffer
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	readMultipleWords(ptr, 24, 1); // Read the LUT length
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
 
 	uint32_t newTableLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
@@ -2071,6 +2372,89 @@ boolean ARTIC_R2::addAddressToLUT(uint32_t platformID)
 			_debugPort->println(F("addAddressToLUT: table length was not incremented correctly!"));
 		return (false);
 	}
+}
+
+// Reads and returns MEM_LOC_RX_FILTERING_LUT_LENGTH
+int ARTIC_R2::getAddressLUTlength()
+{
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_LENGTH;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	uint32_t lut_len = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("getAddressLUTlength: table length is "));
+		_debugPort->println((int)lut_len);
+	}
+
+	return ((int)lut_len);
+}
+
+// Read and return the chosen LUT entry
+// Returns true if the LUT entry was valid
+// Will return false if the entry is invalid (i.e. < current table length)
+// entry numbers starts at zero. If entry is zero, the first address in the LUT is returned (if valid).
+boolean ARTIC_R2::readAddressLUTentry(int entry, uint32_t *address)
+{
+	int currentLUTlength = getAddressLUTlength(); // Read the LUT length
+
+	if (entry >= currentLUTlength) // Check that the entry is valid
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("readAddressLUTentry: invalid entry!"));
+		return (false);
+	}
+
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS + (((uint32_t)entry) << 1); // Calculate the address (each entry occupies two words)
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	uint8_t buffer[6]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(ptr, 24, 2); // Read 2 24-bit words
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	// LUT entries are stored LS 24 bits first
+	uint32_t lut_address = (((uint32_t)buffer[5]) << 24) | (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("readAddressLUTentry: LUT entry "));
+		_debugPort->print(entry);
+		_debugPort->print(F(" is 0x"));
+		_debugPort->println(lut_address, HEX);
+	}
+
+	*address = lut_address;
+
+	return (true);
 }
 
 // Read a downlink message from the RX payload buffer
@@ -2126,6 +2510,8 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 
 	readMultipleWords(ptr, 24, 9); // Read 9 24-bit words
 
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
 	// Pretty-print the received payload as 24-bit values
 	if (_printDebug == true)
 	{
@@ -2143,7 +2529,7 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 	downlinkMessage->payloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("readDownlinkMessage: payloadLength in bit is "));
+		_debugPort->print(F("readDownlinkMessage: payloadLength in bits is "));
 		_debugPort->println(downlinkMessage->payloadLength);
 	}
 
@@ -2237,6 +2623,7 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 
 // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 // The payload contains _only_ the 28-bit platform ID (left justified)
+// Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 {
 	_txPayloadLengthBits = 28;
@@ -2259,6 +2646,7 @@ boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 
 // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 // The payload contains the 28-bit platform ID and the 28 bits of user data (left justified)
+// Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 {
 	_txPayloadLengthBits = 56;
@@ -2286,6 +2674,7 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 }
 
 // Set the Tx payload by copying txPayloadLengthBits and txPayloadBytes into X memory
+// Returns true if the payload was copied successfully
 boolean ARTIC_R2::setTxPayload()
 {
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
@@ -2341,6 +2730,8 @@ boolean ARTIC_R2::setTxPayload()
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
 	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
 
 	uint32_t newPayloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
@@ -2434,24 +2825,33 @@ void ARTIC_R2::readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWor
 }
 
 // Clear one or both interrupts
+// Returns true if the interrupts were cleared successfully
 boolean ARTIC_R2::clearInterrupts(uint8_t interrupts)
 {
 	if ((interrupts < 1) || (interrupts > 3))
 		return (false);
 
+	ARTIC_R2_MCU_Command_Result commandResult;
+
 	if ((interrupts == 1) || (interrupts == 3)) // Clear interrupt 1
 	{
-		sendMCUinstruction(CMD_CLEAR_INT_1);
+		commandResult = sendHousekeepingCommand(CMD_CLEAR_INT_1);
+		if (_printDebug == true)
+		{
+			_debugPort->print(F("clearInterrupts: clear INT1: commandResult is: "));
+			printCommandResult(commandResult, *_debugPort);
+		}
 	}
-
-	delay(10);
 
 	if ((interrupts == 2) || (interrupts == 3)) // Clear interrupt 2
 	{
-		sendMCUinstruction(CMD_CLEAR_INT_2);
+		commandResult = sendHousekeepingCommand(CMD_CLEAR_INT_2);
+		if (_printDebug == true)
+		{
+			_debugPort->print(F("clearInterrupts: clear INT2: commandResult is: "));
+			printCommandResult(commandResult, *_debugPort);
+		}
 	}
-
-	delay(10);
 
 	// Check that the interrupt flags have been cleared (hopefully redundant?)
 	ARTIC_R2_Firmware_Status status;
@@ -2460,13 +2860,25 @@ boolean ARTIC_R2::clearInterrupts(uint8_t interrupts)
 	if ((interrupts == 1) || (interrupts == 3)) // Check if interrupt 1 is clear
 	{
 		if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // If the interrupt bit is still set
+		{
+			if (_printDebug == true)
+			{
+				_debugPort->println(F("clearInterrupts: failed to clear INT1!"));
+			}
 			return (false); // Flag is still set so clearing failed...
+		}
 	}
 
 	if ((interrupts == 2) || (interrupts == 3)) // Check if interrupt 2 is clear
 	{
 		if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // If the interrupt bit is still set
+		{
+			if (_printDebug == true)
+			{
+				_debugPort->println(F("clearInterrupts: failed to clear INT2!"));
+			}
 			return (false); // Flag is still set so clearing failed...
+		}
 	}
 
 	return (true); // Success!

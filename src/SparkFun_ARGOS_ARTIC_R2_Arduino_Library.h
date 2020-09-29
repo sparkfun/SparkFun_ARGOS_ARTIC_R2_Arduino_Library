@@ -4,7 +4,7 @@
   Do you like this library? Help support SparkFun. Buy a board!
   https://www.sparkfun.com/products/
 
-  Written by Paul Clark, August 17th 2020
+  Written by Paul Clark, September 29th 2020
 
   The ARGOS ARTIC R2 chipset allows you to send and receive short data messages via the
 	ARGOS satellite system.
@@ -18,7 +18,7 @@
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 	See the LICENSE.md for more details.
 
-	Parts of this library were inspired by the Arribada Horizon bio-logging platform:
+	Parts of this library were inspired by or based on the Arribada Horizon bio-logging platform:
 	https://github.com/arribada/horizon
 	Arribada's work is gratefully acknowledged.
 
@@ -28,6 +28,7 @@
 #define ARTIC_R2_H
 
 #include <SPI.h> // Needed for SPI communication
+
 // SCLK is normally low (CPOL=0). Data is valid/latched on the falling SCLK edge (CPHA=1). So we need to use SPI MODE1.
 #define ARTIC_R2_SPI_MODE SPI_MODE1
 
@@ -45,6 +46,11 @@
 #define ARTIC_R2_BURST_BLOCK_SIZE 60 // Break burst data up into blocks of this size
 #define ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS 5 // Delay for this many milliseconds between blocks of words
 #define ARTIC_R2_BURST_FINISH_DELAY_MS 13 // Delay for this many milliseconds after a burst
+#define ARTIC_R2_INSTRUCTION_DELAY_MS 10 // Delay for this many milliseconds after sending an MCU instruction before checking the MCU status
+#define ARTIC_R2_CONFIGURATION_DELAY_MS 10 // Delay for this many milliseconds after sending an MCU configuration command before checking the MCU status
+#define ARTIC_R2_HOUSEKEEPING_DELAY_MS 1 // Delay for this many milliseconds after sending an MCU housekeeping command before checking the MCU status
+
+#define ARTIC_R2_MAX_ADDRESS_LUT_LENGTH 50 // Maximum length of the address-filtering look-up-table
 
 #define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
 
@@ -123,7 +129,7 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 };
 
 // MCU Configuration Commands
-//const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006 ?! TO DO: Check this!
+//const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_MODE = 0x02;
 const uint8_t CONFIG_CMD_SET_ARGOS_3_RX_BACKUP_MODE = 0x03;
 const uint8_t CONFIG_CMD_SET_PTT_A2_TX_MODE = 0x04;
@@ -142,6 +148,7 @@ typedef enum {
 	ARTIC_R2_MCU_COMMAND_UNCERTAIN, // Command / instruction uncertain? (The MCU did not raise ACCEPTED, REJECTED or OVERFLOW)
 	ARTIC_R2_MCU_COMMAND_INVALID, // The configuration command / instruction was invalid
 	ARTIC_R2_MCU_INSTRUCTION_IN_PROGRESS, // sendMCUinstruction will return this if an instruction is already in progress
+	ARTIC_R2_MCU_COMMAND_VALID, // sendHousekeepingCommand will return this if the command was valid
 } ARTIC_R2_MCU_Command_Result;
 
 // Configuration register (read only)
@@ -225,7 +232,7 @@ typedef enum {
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION,
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_RX_SATELLITE_DETECTED,
 	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT,
-	ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED,
+	// ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION_SATELLITE_TIMEOUT_WITH_SATELLITE_DETECTED, // Note: this state may be impossible to reach. Status seems to go IDLE as soon as a satellite is detected.
 
 	ARTIC_R2_MCU_PROGRESS_INTERNAL_ERROR,
 
@@ -313,6 +320,7 @@ public:
 
 	ARTIC_R2_MCU_Command_Result sendConfigurationCommand(uint8_t command); // Send a single 8-bit configuration command
 	ARTIC_R2_MCU_Command_Result sendMCUinstruction(uint8_t instruction); // Send a single 8-bit MCU instruction
+	ARTIC_R2_MCU_Command_Result sendHousekeepingCommand(uint8_t command); // Send a single 8-bit MCU housekeeping command
 	void printCommandResult(ARTIC_R2_MCU_Command_Result result, Stream &port = Serial); // Pretty-print the command result
 
 	boolean checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress *progress); // Check the MCU instruction progress. Returns true if the instruction is complete.
@@ -345,18 +353,39 @@ public:
 
 	boolean setARGOS23TxFrequency(float freq_MHz); // Set the ARGOS 2/3 TX Frequency
 	boolean setARGOS4TxFrequency(float freq_MHz); // Set the ARGOS 4 TX Frequency
+	float getARGOS23TxFrequency(); // Get the ARGOS 2/3 TX Frequency
+	float getARGOS4TxFrequency(); // Get the ARGOS 4 TX Frequency
 
 	boolean enableRXCRC(); // Enable RX CRC check
 	boolean disableRXCRC(); // Disable RX CRC check
+	boolean isRXCRCenabled(); // Returns true if the RX CRC is enabled
 	boolean enableRXTransparentMode(); // Enable RX transparent mode
 	boolean disableRXTransparentMode(); // Disable RX transparent mode
+	boolean isRXTransparentModeEnabled(); // Returns true if RX transparent mode is enabled
 	boolean clearAddressLUT(); // Clear the address look-up-table by setting the length to zero
 	boolean addAddressToLUT(uint32_t platformID); // Add the specified platform ID to the message filter Look Up Table
+	int getAddressLUTlength(); // Returns the address look-up-table length
+	boolean readAddressLUTentry(int entry, uint32_t *address); // Returns the LUT address for the chosen entry
 
 	boolean readDownlinkMessage(Downlink_Message *downlinkMessage); // Read a downlink message from the RX payload buffer
 
+	// Helper functions to assemble the different message payloads
 	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
+
+	// Storage for message transmission
+	// This storage is used by (e.g.) setPayloadARGOS4VLD0 and setPayloadARGOS4VLD28
+	// It should probably be private, but it is public just in case the user wants
+	// to assemble their own payload.
+	uint32_t _txPayloadLengthBits = 0; // The encoded message length in bits
+	uint8_t _txPayloadBytes[660]; // Storage for up to 220 24-bit words
+
+	// This function copies _txPayloadLengthBits and _txPayloadBytes to the TX Payload in XMEM
+	// It gets called by (e.g.) setPayloadARGOS4VLD0 and setPayloadARGOS4VLD28
+	// This function should probably be private, but it is public just in case the user wants
+	// to assemble their own payload.
+	// It returns true if the payload was copied successfully.
+	boolean setTxPayload();
 
 private:
 	//Variables
@@ -380,22 +409,18 @@ private:
 	uint32_t _delay24cycles = 8; // Delay for this many microseconds before performing a read
 
 	// Use instructionInProgress to keep track of which instruction is currently in progress.
-	// instructionInProgress will be 0 when the ARTIC is idle.
+	// instructionInProgress will be ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS when the ARTIC is idle.
 	// It will be set to one of the INST_ states by sendMCUinstruction.
-	uint8_t _instructionInProgress = 0;
-
-	// Storage for message transmission
-	uint32_t _txPayloadLengthBits = 0; // The encoded message length in bits
-	uint8_t _txPayloadBytes[660]; // Storage for up to 220 24-bit words
+	uint8_t _instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS;
 
 	//Functions
-	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode);
-	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords);
-	void write24BitWord(uint32_t word);
-	void writeTwo24BitWords(uint32_t word1, uint32_t word2);
-	void writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords);
-	boolean setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz);
-	boolean setTxPayload();
+	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
+	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Read multiple words using burst mode. configureBurstmodeRegister must have been called first.
+	void write24BitWord(uint32_t word); // Write a single 24-bit word using burst mode. configureBurstmodeRegister must have been called first.
+	void writeTwo24BitWords(uint32_t word1, uint32_t word2); // Write two 24-bit words using burst mode. configureBurstmodeRegister must have been called first.
+	void writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Write multiple words using burst mode. configureBurstmodeRegister must have been called first.
+	boolean setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz); // Set mem_loc to the desired TX frequency.
+	float getARGOSTxFrequency(uint16_t mem_loc); // Return the TX frequency from mem_loc in MHz
 };
 
 #endif

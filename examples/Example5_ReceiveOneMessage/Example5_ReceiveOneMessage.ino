@@ -2,17 +2,15 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: September 25th 2020
+  Date: September 29th 2020
 
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
-    sets the satellite detection timeout to 60 seconds;
+    sets the satellite detection timeout to 600 seconds;
     sets the RX mode to ARGOS 3;
-    adds the platform ID to the address Look Up Table (LUT);
-    disables RX transparent mode;
-    enables the RX CRC check (even though this is enabled by default);
+    enables RX transparent mode (so we will receive the first valid message even if it is not addressed to us);
     instructs the ARTIC to Receive One Message (for an unlimited time);
     keeps checking the MCU status until a message is received.
 
@@ -22,9 +20,7 @@
   Feel like supporting our work? Buy a board from SparkFun!
   https://www.sparkfun.com/products/
 
-  This example requires a receiver address. Copy and paste your 48-bit receiver address into ADDRESS_LS_BITS and ADDRESS_MS_BITS
-
-  The ARTIC firmware takes up 127KB of program memory!
+  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
@@ -42,16 +38,13 @@
   (SPI SCK = D13)
 */
 
-// CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
-// E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
-const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
-
 #include <SPI.h>
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
 ARTIC_R2 myARTIC;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
+// (Change these if required)
 uint8_t CS_Pin = 24;
 uint8_t GAIN8_Pin = 3;
 uint8_t GAIN16_Pin = 4;
@@ -66,10 +59,14 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("ARGOS ARTIC R2 Example"));
+  Serial.println();
+
+  Serial.println(F("The ARTIC is booting. This will take approx. 12 seconds."));
+  Serial.println();
 
   SPI.begin();
 
-  //myARTIC.enableDebugging(); // Enable debug messages to Serial
+  myARTIC.enableDebugging(); // Enable debug messages to Serial
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
@@ -79,23 +76,59 @@ void setup()
       ; // Do nothing more
   }
 
+  Serial.println(F("ARTIC R2 boot was successful."));
+  Serial.println();
+
+  unsigned long beginFinishedAt = millis(); // Keep a record of millis() when .begin finished
+
+  Serial.println(F("Waiting for INT1 to go high... (This could take up to 5 minutes with ARTIC006 firmware!)"));
+  Serial.println();
+
+  ARTIC_R2_Firmware_Status status;
+
+  do
+  {
+    myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
+  
+    Serial.println(F("ARTIC R2 Firmware Status:"));
+    myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+    Serial.println();
+  
+    Serial.print(F("It has been "));
+    Serial.print((millis() - beginFinishedAt) / 1000);
+    Serial.println(F(" seconds since the ARTIC was booted."));
+    Serial.println();
+    
+    delay(5000);
+  }
+  while (status.STATUS_REGISTER_BITS.DSP2MCU_INT1 == false); // Check the interrupt 1 flag. This will go high when the RX offset calibration has completed.
+  
+  Serial.println(F("INT1 pin is high. ARTIC is ready!"));
+  Serial.println();
+
+  Serial.println(F("Clearing INT1."));
+  Serial.println();
+
+  // Clear INT1
+  if (myARTIC.clearInterrupts(1) == false)
+  {
+    Serial.println("clearInterrupts failed. Freezing...");
+    //while (1)
+    //  ; // Do nothing more
+  }  
+  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
+  Serial.println(F("ARTIC R2 Firmware Status:"));
+  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+  Serial.println();
+  
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
   
-  //myARTIC.printARGOSconfiguration(configuration, Serial1); // E.g.: pretty-print the TX and RX configuration to Serial1 instead
-
-  // Read and print the firmware status
-  ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-  Serial.println(F("ARTIC R2 Firmware Status:"));
-  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-  
-  //myARTIC.printFirmwareStatus(status, Serial1); // E.g.: pretty-print the firmware status to Serial1 instead
-
-  // Set the satellite detection timeout to 60 seconds
-  if (myARTIC.setSatelliteDetectionTimeout(60) == false)
+  // Set the satellite detection timeout to 600 seconds
+  if (myARTIC.setSatelliteDetectionTimeout(600) == false)
   {
     Serial.println("setSatelliteDetectionTimeout failed. Freezing...");
     while (1)
@@ -116,51 +149,33 @@ void setup()
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration);
 
-  // Add our address (platform ID) to the LUT.
-  //   You can add multiple addresses if required, up to a maximum of 50.
-  //   Add an additional address by calling addAddressToLUT again.
-  //   addAddressToLUT will return false if the LUT is full.
-  //   You can clear the LUT by calling clearAddressLUT.
-  if (myARTIC.addAddressToLUT(PLATFORM_ID) == false)
+  // Enable RX transparent mode so we will receive the first valid message even if it is not addressed to us
+  if (myARTIC.enableRXTransparentMode() == false)
   {
-    Serial.println(F("addAddressToLUT failed! Freezing..."));
+    Serial.println(F("enableRXTransparentMode failed! Freezing..."));
     while (1)
       ; // Do nothing more
   }
 
-  // Disable RX transparent mode so we will only receive messages addressed to us
-  // (transparent mode is disabled by default)
-  if (myARTIC.disableRXTransparentMode() == false)
-  {
-    Serial.println(F("disableRXTransparentMode failed! Freezing..."));
-    while (1)
-      ; // Do nothing more
-  }
-
-  // Enable the RX CRC check (even though this is enabled by default)
-  if (myARTIC.enableRXCRC() == false)
-  {
-    Serial.println(F("enableRXCRC failed! Freezing..."));
-    while (1)
-      ; // Do nothing more
-  }
+  Serial.println();
+  Serial.println(F("Starting message reception..."));
+  Serial.println();
 
   // Start the ARTIC in receiving mode for an unlimited time until 1 message has been received.
   // If the message is received the Artic will go to IDLE. The user can abort the reception using the ‘Go to idle’ command.
   result = myARTIC.sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE);
-  if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
+  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
+  Serial.println(F("ARTIC R2 Firmware Status:"));
+  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+  Serial.println();
+  Serial.println(F("ARTIC R2 MCU instruction result:"));
+  myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
+  Serial.println();
+  
+  if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
   {
-    Serial.println();
-    Serial.println("<sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE) failed>");
-    Serial.println();
-    myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-    Serial.println(F("ARTIC R2 Firmware Status:"));
-    myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-    Serial.println();
-    Serial.println(F("ARTIC_R2_MCU_Command_Result:"));
-    myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
-    Serial.println();
-    Serial.println("</sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE) failed> Freezing...");
+    Serial.println("MCU Command failed! Freezing...");
     while (1)
       ; // Do nothing more
   }
@@ -195,7 +210,7 @@ void loop()
   if (instructionComplete)
   {
     Serial.println();
-    Serial.println(F("Instruction is complete!"));
+    Serial.println(F("Message reception is complete!"));
     Serial.println();
     
     if (progress == ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE) // If a message was received, read it.
@@ -216,8 +231,6 @@ void loop()
           Serial.printf("%02X", downlinkMessage.payload[i]);
         }
         Serial.println();
-        //while (1)
-        //  ; // Do nothing more
       }
       else
       {
