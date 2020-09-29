@@ -8,7 +8,6 @@
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
-    sets the satellite detection timeout to 600 seconds;
     sets the RX mode to ARGOS 3;
     enables RX transparent mode (so we will receive the first valid message even if it is not addressed to us);
     instructs the ARTIC to Receive One Message (for an unlimited time);
@@ -127,14 +126,6 @@ void setup()
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
   
-  // Set the satellite detection timeout to 600 seconds
-  if (myARTIC.setSatelliteDetectionTimeout(600) == false)
-  {
-    Serial.println("setSatelliteDetectionTimeout failed. Freezing...");
-    while (1)
-      ; // Do nothing more
-  }
-
   // Set the RX mode to ARGOS 3
   ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -221,12 +212,12 @@ void loop()
       {
         Serial.println(F("Message received:"));
         Serial.printf("Payload length:  %d\n", downlinkMessage.payloadLength);
-        Serial.printf("Addressee ID:    0x%04X\n", downlinkMessage.addresseeIdentification);
-        Serial.printf("ADCS:            0x%02X\n", downlinkMessage.ADCS);
+        Serial.printf("Addressee ID:    0x%07X\n", downlinkMessage.addresseeIdentification);
+        Serial.printf("ADCS:            0x%X\n", downlinkMessage.ADCS);
         Serial.printf("Service:         0x%02X\n", downlinkMessage.service);
         Serial.printf("FCS:             0x%04X\n", downlinkMessage.FCS);
         Serial.print(F("Payload buffer:  0x"));
-        for (int i = 0; i < 17; i++)
+        for (int i = 0; i < ((downlinkMessage.payloadLength / 8) - 7); i++)
         {
           Serial.printf("%02X", downlinkMessage.payload[i]);
         }

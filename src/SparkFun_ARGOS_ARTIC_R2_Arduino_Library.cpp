@@ -1065,14 +1065,14 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendHousekeepingCommand(uint8_t command)
 
 	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
 
-	if (_printDebug == true)
-	{
-		readStatusRegister(&status);
-		if (!status.STATUS_REGISTER_BITS.IDLE) // If the firmware is not idle
-		{
-			_debugPort->println(F("sendHousekeepingCommand: ARTIC is not idle. This will probably fail."));
-		}
-	}
+	// if (_printDebug == true)
+	// {
+	// 	readStatusRegister(&status);
+	// 	if (!status.STATUS_REGISTER_BITS.IDLE) // If the firmware is not idle
+	// 	{
+	// 		_debugPort->println(F("sendHousekeepingCommand: ARTIC is not idle. This will probably fail."));
+	// 	}
+	// }
 
 	// Write 8 bits to SPI:
 	_spiPort->beginTransaction(SPISettings(_spiPortSpeed, MSBFIRST, ARTIC_R2_SPI_MODE));
@@ -2565,14 +2565,14 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 		_debugPort->println(downlinkMessage->service, HEX);
 	}
 
-	// Calculate the number of whole bytes in the message
-	// TO DO: Check if the payload length does include the 7 bytes for the Addressee ID, ADCS, Service and FCS
-	int numBytes = ((downlinkMessage->payloadLength) >> 4) - 7; // Divide by 8 and subtract 7 (for the Addressee ID, ADCS, Service and FCS)
+	// Calculate the number of bytes in the message
+	// Payload length does include the 7 bytes for the Addressee ID, ADCS, Service and FCS
+	int numBytes = ((downlinkMessage->payloadLength) >> 3) - 7; // Divide by 8 and subtract 7 (for the Addressee ID, ADCS, Service and FCS)
 
-	// Copy the full bytes into rxData
+	// Copy the data bytes into rxData
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("readDownlinkMessage: left-justified payload data is 0x"));
+		_debugPort->print(F("readDownlinkMessage: payload data is 0x"));
 	}
 	for (int i = 0; i < numBytes; i++)
 	{
@@ -2583,35 +2583,13 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 			_debugPort->print(downlinkMessage->payload[i], HEX);
 		}
 	}
-
-	// Add a partial payload byte (if there is one)
-
-	// Calculate the number of extra bits
-	int numExtraBits = ((int)downlinkMessage->payloadLength) - ((((int)numBytes) + 7) * 8);
-	// Extract the extra bits. Left-justify them.
-	if (numExtraBits > 0)
+	if (_printDebug == true)
 	{
-		// Left-justify the extra bits
-		downlinkMessage->payload[numBytes] = (buffer[numBytes + 8] >> (8 - numExtraBits)) << (8 - numExtraBits);
-		if (_printDebug == true)
-		{
-			if ((downlinkMessage->payload[numBytes] < 0x10) && (numExtraBits >= 5)) _debugPort->print("0");
-			_debugPort->println(downlinkMessage->payload[numBytes], HEX);
-		}
-		// Extract the FCS bits
-		downlinkMessage->FCS = ((uint16_t)(buffer[numBytes + 8] << numExtraBits)) << 8;
-		downlinkMessage->FCS = downlinkMessage->FCS | (((uint16_t)buffer[numBytes + 9]) << numExtraBits);
-		downlinkMessage->FCS = downlinkMessage->FCS | (((uint16_t)buffer[numBytes + 10]) >> (8 - numExtraBits));
+		_debugPort->println(); // Tidy up debug printing
 	}
-	else
-	{
-		// There are no extra bits so FCS is byte-aligned
-		downlinkMessage->FCS = (((uint16_t)buffer[numBytes + 9]) << 8) | ((uint16_t)buffer[numBytes + 10]);
-		if (_printDebug == true)
-		{
-			_debugPort->println(); // Tidy up debug printing
-		}
-	}
+
+	// FCS is always byte-aligned
+	downlinkMessage->FCS = (((uint16_t)buffer[numBytes + 8]) << 8) | ((uint16_t)buffer[numBytes + 9]);
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("readDownlinkMessage: FCS is 0x"));

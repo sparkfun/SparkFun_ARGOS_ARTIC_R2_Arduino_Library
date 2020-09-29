@@ -291,12 +291,12 @@ typedef struct {
 
 // Downlink Message - as defined by ARGOS standard A4-SYS-IF-0086-CNES
 typedef struct {
-	uint32_t payloadLength;
-	uint32_t addresseeIdentification;
-	uint8_t ADCS;
-	uint8_t service;
+	uint32_t payloadLength; // 24 bits
+	uint32_t addresseeIdentification; // 28 bits
+	uint8_t ADCS; // 4 bits
+	uint8_t service; // 8 bits
 	uint8_t payload[17]; // Maxmimum payload length is 17 bytes (136 bits)
-	uint16_t FCS;
+	uint16_t FCS; // 16 bits
 } Downlink_Message;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
