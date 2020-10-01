@@ -63,6 +63,10 @@ void setup()
   //myARTIC.enableDebugging(); // Enable debug messages to Serial
   //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages to Serial1 instead
 
+  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
+  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
+  myARTIC.invertPWNENpin();
+
   // Begin (initialize) the ARTIC
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {

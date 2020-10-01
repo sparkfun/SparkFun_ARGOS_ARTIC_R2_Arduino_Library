@@ -44,7 +44,7 @@
 // CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below to filter out all other messages.
 // E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
 // For testing, you can set the Platform ID to 0x000000BE or 0x000000C7 or 0x000000E1
-const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
+const uint32_t PLATFORM_ID = 0x000000BE; // Update this with your Platform ID
 
 #include <SPI.h>
 
@@ -74,6 +74,10 @@ void setup()
   SPI.begin();
 
   myARTIC.enableDebugging(); // Enable debug messages to Serial
+
+  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
+  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
+  myARTIC.invertPWNENpin();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)

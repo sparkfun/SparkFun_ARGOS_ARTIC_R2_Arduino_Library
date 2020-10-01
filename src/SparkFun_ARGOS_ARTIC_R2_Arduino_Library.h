@@ -29,13 +29,26 @@
 
 #include <SPI.h> // Needed for SPI communication
 
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+#define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
+
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+// Include firmware binary data
+// P 32-bit 10240 DSP Program memory
+// X 24-bit 21845 DSP X memory
+// Y 24-bit 6826 DSP Y memory
+#include "ARTIC_R2_Firmware_PMEM.h"
+#include "ARTIC_R2_Firmware_XMEM.h"
+#include "ARTIC_R2_Firmware_YMEM.h"
+#endif
+
+#include "ARTIC_R2_Firmware_Memory_Locations.h" // This file defines the firmware parameter memory locations. The locations for ARTIC004 and ARTIC006 are very different!
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
 // SCLK is normally low (CPOL=0). Data is valid/latched on the falling SCLK edge (CPHA=1). So we need to use SPI MODE1.
 #define ARTIC_R2_SPI_MODE SPI_MODE1
-
-#define ARTIC_R2_PWR_EN_ON HIGH // Arribada Horizon: pull PWR_EN high to enable power
-#define ARTIC_R2_PWR_EN_OFF LOW // Arribada Horizon: pull PWR_EN low to disable power
-//#define ARTIC_R2_PWR_EN_ON LOW // SparkFun ARTIC R2 Breakout: pull PWR_EN low to enable power
-//#define ARTIC_R2_PWR_EN_OFF HIGH // SparkFun ARTIC R2 Breakout: pull PWR_EN high to disable power
 
 #define ARTIC_R2_FLASH_BOOT_TIMEOUT 2500 // ARTIC should boot in 2.25 secs. Timeout after 2500ms.
 #define ARTIC_R2_BOOT_TIMEOUT 500 // Datasheet says ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
@@ -51,18 +64,6 @@
 #define ARTIC_R2_HOUSEKEEPING_DELAY_MS 1 // Delay for this many milliseconds after sending an MCU housekeeping command before checking the MCU status
 
 #define ARTIC_R2_MAX_ADDRESS_LUT_LENGTH 50 // Maximum length of the address-filtering look-up-table
-
-#define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
-
-#ifdef ARTIC_R2_UPLOAD_FIRMWARE
-// Include firmware binary data
-// P 32-bit 10240 DSP Program memory
-// X 24-bit 21845 DSP X memory
-// Y 24-bit 6826 DSP Y memory
-#include "Firmware_ARTIC006_flash_image__PMEM.h"
-#include "Firmware_ARTIC006_flash_image__XMEM.h"
-#include "Firmware_ARTIC006_flash_image__YMEM.h"
-#endif
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -250,31 +251,6 @@ const uint8_t ARTIC_R2_DSP_CRTL_REG_READ = 0x03; // DSP control register is at a
 
 const uint8_t ARTIC_R2_DSP_CRTL_REG_MAGIC_NUMBER = 85; // The DSP control register will contain this when it is ready for firmware upload
 
-// P Memory Locations
-const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
-
-// X Memory locations
-const uint16_t MEM_LOC_ARGOS_CONFIGURATION = 0x137E; // Size 1. Read only (Was 0x0384 in ARTIC004)
-const uint16_t MEM_LOC_RX_PAYLOAD = 0x1204; // Size 9. Read only (Was 0x0200 in ARTIC004)
-const uint16_t MEM_LOC_RX_FILTERING_CONFIGURATION = 0x120D; // Size 104. Read/Write (Was 0x0209 in ARTIC004)
-const uint16_t MEM_LOC_RX_FILTERING_ENABLE_CRC = 0x120D; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_TRANSPARENT_MODE = 0x120E; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_LUT_LENGTH = 0x120F; // Size 1. Read/Write
-const uint16_t MEM_LOC_RX_FILTERING_LUT_FIRST_ADDRESS = 0x1210; // Read/Write
-const uint16_t MEM_LOC_RX_TIMEOUT = 0x1275; // Size 1. Read/Write (Was 0x0271 in ARTIC004)
-const uint16_t MEM_LOC_SATELLITE_DETECTION_TIMEOUT = 0x1276; // Size 1. Read/Write (Was 0x0272 in ARTIC004)
-const uint16_t MEM_LOC_TX_PAYLOAD = 0x1277; // Size 220. Write only.  (Was 0x0273 in ARTIC004)
-const uint16_t MEM_LOC_TX_FREQ_ARGOS_2_3 = 0x1353; // Size 1. Read/Write (Was 0x034F in ARTIC004)
-const uint16_t MEM_LOC_TX_FREQ_ARGOS_4 = 0x1363; // Size 1. Read/Write (Was 0x035F in ARTIC004)
-const uint16_t MEM_LOC_TCXO_WARMUP_TIME = 0x1373; // Sizde 1. Read/Write (Was 0x036F in ARTIC004)
-const uint16_t MEM_LOC_TCXO_CONTROL = 0x1374; // Size 1. Read/Write (Was 0x0370 in ARTIC004)
-const uint16_t MEM_LOC_CRC_RESULTS = 0x1375; // Size 3. Read only.  (Was 0x0371 in ARTIC004)
-const uint16_t MEM_LOC_TX_CERTIFICATION_INTERVAL = 0x137D; // Size 1. Read/Write (Was 0x0379 in ARTIC004)
-const uint16_t MEM_LOC_FLASH_PROG_BUFFER = 0x137F; // Flash Programming Buffer (New in ARTIC006)
-
-// IO Memory locations
-const uint16_t MEM_LOC_FIRMWARE_STATUS_REGISTER = 0x8018;
-
 // TCXO Control
 typedef struct {
 	union {
@@ -298,6 +274,84 @@ typedef struct {
 	uint8_t payload[17]; // Maxmimum payload length is 17 bytes (136 bits)
 	uint16_t FCS; // 16 bits
 } Downlink_Message;
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+// Satellite Pass Prediction - taken from Arribada Horizon
+// Thank you Arribada!
+// Presumably written by CLS
+
+// File was originally called: prepas.h
+
+#define SYSHAL_SAT_MAX_NUM_SATS (8)
+
+#define MAXLU 132
+#define sortie_erreur -1
+
+#ifndef SYSHAL_SAT_MINIMUM_PAS
+#define SYSHAL_SAT_MINIMUM_PAS 1
+#endif
+
+typedef struct
+{
+    float pf_lon;            /* geodetic position of the beacon */
+    float pf_lat;            /* geodetic position of the beacon */
+    long  time_start;
+    long  time_end;
+    int   s_differe;
+    float site_min_requis;   /* min site pour calcul de la duree (deg.) */
+    float site_max_requis;   /* min site (deg.) */
+    float marge_temporelle;  /* marge temporelle (min/6mois) */
+    float marge_geog_lat;    /* marge geographique (deg) */
+    float marge_geog_lon;    /* marge geographique (deg) */
+    int   Npass_max;         /* nombre de passages max par satellite */
+} pc;
+
+typedef struct
+{
+    char  sat[2];
+    long  time_bul;
+    float dga;        /* semi-major axis (km) */
+    float inc;        /* orbit inclination (deg) */
+    float lon_asc;    /* longitude of ascending node (deg) */
+    float d_noeud;    /* asc. node drift during one revolution (deg) */
+    float ts;         /* orbit period (min) */
+    float dgap;       /* drift of semi-major axis (m/jour) */
+} po;
+
+typedef struct
+{
+    char sat[2];
+    long tpp;        /* date du prochain passage (sec90) */
+    int  duree;      /* duree (sec) */
+    int  site_max;   /* site max dans le passage (deg) */
+} pp;
+
+typedef struct __attribute__((__packed__))
+{
+    char sat[2];
+    uint32_t time_bulletin;
+    float params[6];
+} bulletin_data_t;
+
+/* +-------------------------------------------------------------------+*/
+/* +                      C O N S T A N T E S                          +*/
+/* +-------------------------------------------------------------------+*/
+
+#define SECONDS_IN_DAY (24 * 60 * 60)
+
+const   float   pi  = 3.1415926535;     /* Pi     value     */
+const   float   demi_pi = 1.570796327;          /* Pi/2   value     */
+const   float   two_pi  = 6.283185307;          /* 2*pi   value     */
+const   float   deg_rad = 0.017453292;          /* pi/180 value     */
+const   float   rad_deg = 57.29577951;          /* 180/pi value     */
+
+const   int pas = SYSHAL_SAT_MINIMUM_PAS;                   /* en (sec)     */
+
+const   float   rt  = 6378.137;             /* Earth radius     */
+const   float   rs  = 7200;         /* Orbit radius     */
+
+const int TIME_CONVERTOR = 631152000; /* Change apoch from 1990 to 1970 */
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -370,6 +424,7 @@ public:
 	boolean readDownlinkMessage(Downlink_Message *downlinkMessage); // Read a downlink message from the RX payload buffer
 
 	// Helper functions to assemble the different message payloads
+	boolean setPayloadARGOS3ZE(uint32_t platformID); // Set the Tx payload for a ARGOS 3 ZE message
 	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 
@@ -386,6 +441,13 @@ public:
 	// to assemble their own payload.
 	// It returns true if the payload was copied successfully.
 	boolean setTxPayload();
+
+	// Call invertPWNENpin to invert the PWR_EN pin for the Arribada Horizon
+	void invertPWNENpin(boolean invert = true);
+
+	// Arribada / CLS Satellite Pass Predictor
+	uint32_t next_predict(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time);
+	int prepas (pc *p_pc, po *p_po, pp *p_pp, int number_sat);
 
 private:
 	//Variables
@@ -413,6 +475,10 @@ private:
 	// It will be set to one of the INST_ states by sendMCUinstruction.
 	uint8_t _instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS;
 
+	// SparkFun ARTIC R2 Breakout: pull PWR_EN low to enable power
+	// Arribada Horizon: pull PWR_EN high to enable power
+	boolean _invertedPWREN = false; // If true, PWR_EN will be inverted for the Arribada Horizon
+
 	//Functions
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Read multiple words using burst mode. configureBurstmodeRegister must have been called first.
@@ -421,6 +487,24 @@ private:
 	void writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Write multiple words using burst mode. configureBurstmodeRegister must have been called first.
 	boolean setARGOSTxFrequency(uint16_t mem_loc, float freq_MHz); // Set mem_loc to the desired TX frequency.
 	float getARGOSTxFrequency(uint16_t mem_loc); // Return the TX frequency from mem_loc in MHz
+
+	// Arribada / CLS Satellite Pass Predictor
+	void su_distance(long   t1,     /* input */
+
+	                 float  x_pf,
+	                 float  y_pf,
+	                 float  z_pf,
+	                 float  ws,
+	                 float  sin_i,
+	                 float  cos_i,
+	                 float  asc_node,
+	                 float  wt,
+
+	                 float  *d2);       /* output */
+	uint8_t select_closest(pp *pt_pp, int number_sat, uint32_t desired_time);
+	void print_list(pp * p_pp,  int number_sat);
+	void print_config(pc    *p_pc);
+	void print_sat(po *p_po, int number_sat);
 };
 
 #endif

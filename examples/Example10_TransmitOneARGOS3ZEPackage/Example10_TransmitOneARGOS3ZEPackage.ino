@@ -9,12 +9,12 @@
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
     sets the satellite detection timeout to 60 seconds;
-    sets the TX mode to ARGOS 4 VLD;
+    sets the TX mode to ARGOS PTT-ZE;
     sets the TX frequency;
     instructs the ARTIC to Transmit One Package And Go Idle;
     keeps checking the MCU status until transmit is complete.
 
-  The ARGOS 4 VLD message contains the 28-bit platform ID and either 0 or 28 bits of user data.
+  The ARGOS 3 PTT-ZE message contains only the 28-bit platform ID.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -71,6 +71,10 @@ void setup()
 
   //myARTIC.enableDebugging(); // Enable debug messages to Serial
 
+  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
+  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
+  myARTIC.invertPWNENpin();
+
   // Begin the ARTIC: enable power and upload firmware or boot from flash
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {
@@ -102,8 +106,8 @@ void setup()
       ; // Do nothing more
   }
 
-  // Set the TX mode to ARGOS 4 VLD
-  ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE);
+  // Set the TX mode to ARGOS 3 PTT-ZE
+  ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_ZE_TX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
   if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
   {
@@ -116,30 +120,21 @@ void setup()
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration);
 
-  // Set the ARGOS 4 TX frequency to 401.495 MHz
-  if (myARTIC.setARGOS4TxFrequency(401.495) == false)
+  // Set the ARGOS 3 TX frequency to 401.68 MHz
+  if (myARTIC.setARGOS23TxFrequency(401.68) == false)
   {
-    Serial.println("setARGOS4TxFrequency failed. Freezing...");
+    Serial.println("setARGOS23TxFrequency failed. Freezing...");
     while (1)
       ; // Do nothing more
   }
   
-  // Configure the Tx payload for ARGOS 4 VLD using our platform ID and 0 bits of user data
-  if (myARTIC.setPayloadARGOS4VLD0(PLATFORM_ID) == false)
+  // Configure the Tx payload for ARGOS 3 PTT-ZE using our platform ID and 0 bits of user data
+  if (myARTIC.setPayloadARGOS3ZE(PLATFORM_ID) == false)
   {
-    Serial.println(F("setPayloadARGOS4VLD0 failed! Freezing..."));
+    Serial.println(F("setPayloadARGOS3ZE failed! Freezing..."));
     while (1)
       ; // Do nothing more
   }
-
-//  // Configure the Tx payload for ARGOS 4 VLD using our platform ID and 28 bits of user data
-//  uint32_t userData = 0x1234567;
-//  if (myARTIC.setPayloadARGOS4VLD28(PLATFORM_ID, userData) == false)
-//  {
-//    Serial.println(F("setPayloadARGOS4VLD28 failed! Freezing..."));
-//    while (1)
-//      ; // Do nothing more
-//  }
 
   // Start the ARTIC in Transmit One Package And Go Idle mode
   result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);

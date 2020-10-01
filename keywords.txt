@@ -58,12 +58,13 @@ addAddressToLUT	KEYWORD2
 getAddressLUTlength	KEYWORD2
 readAddressLUTentry	KEYWORD2
 readDownlinkMessage	KEYWORD2
+setPayloadARGOS3ZE	KEYWORD2
 setPayloadARGOS4VLD0	KEYWORD2
 setPayloadARGOS4VLD28	KEYWORD2
-
 _txPayloadLengthBits	KEYWORD2
 _txPayloadBytes	KEYWORD2
 setTxPayload	KEYWORD2
+invertPWNENpin	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

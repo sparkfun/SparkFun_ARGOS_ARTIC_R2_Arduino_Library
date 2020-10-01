@@ -40,7 +40,7 @@
   (SPI SCK = D13)
 */
 
-#define GO_IDLE_AFTER 300000 // Abort receive (go idle) after this many milliseconds (300000 = 5 mins)
+#define GO_IDLE_AFTER 600000 // Abort receive (go idle) after this many milliseconds (600000 = 10 mins) (boot will take nearly 5 minutes)
 
 boolean goToIdleSent = false; // Use this flag to make sure we only send Go To Idle once
 
@@ -73,6 +73,10 @@ void setup()
   SPI.begin();
 
   myARTIC.enableDebugging(); // Enable debug messages to Serial
+
+  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
+  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
+  myARTIC.invertPWNENpin();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)

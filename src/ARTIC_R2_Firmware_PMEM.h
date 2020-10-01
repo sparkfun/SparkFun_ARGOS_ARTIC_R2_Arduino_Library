@@ -1,3 +1,9 @@
+// ARTIC R2 ARTIC006 Firmware PMEM
+// Converted from ARTIC.flash
+
+#ifndef ARTIC_R2_PMEM_H
+#define ARTIC_R2_PMEM_H
+
 const uint32_t ARTIC_R2_PMEM_LEN = 10240;
 const uint32_t ARTIC_R2_PMEM_CHECKSUM = 0x4DC69E;
 const uint32_t ARTIC_R2_PMEM[10240] = {
@@ -10242,3 +10248,5 @@ const uint32_t ARTIC_R2_PMEM[10240] = {
 	0x00000000,
 	0x00000000
 };
+
+#endif
