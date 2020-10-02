@@ -14,22 +14,7 @@
   Feel like supporting our work? Buy a board from SparkFun!
   https://www.sparkfun.com/products/
 
-*/
 
-#include <time.h> // Needed to calculate the epoch
-
-#include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
-ARTIC_R2 myARTIC;
-
-void setup()
-{
-  Serial.begin(115200);
-  Serial.println();
-  Serial.println(F("ARGOS ARTIC R2 Example"));
-
-  myARTIC.enableDebugging(); // Enable debug messages to Serial
-
-/*  
   You can download the Satellite AOP (Adapted Orbit Parameters) from https://argos-system.cls.fr/argos-cwi2/login.html
   
   The AOP file contains the following fields separated with spaces :
@@ -70,68 +55,44 @@ void setup()
   
  */
 
-  // Run the pass predictor for METOP-A
-  // Satellite bulletin is a struct which contains the:
-  // satellite identifier; time of the orbit bulletin; and the six orbit parameters
-  // (Create an array of these if number_sat is > 1)
-  bulletin_data_t sat_bulletin; 
-  
-  sat_bulletin.sat[0] = 'M'; // satellite (char[2])
-  sat_bulletin.sat[1] = 'A';
+const uint8_t numARGOSsatellites = 7; // Change this if required to match the number of satellites in the AOP
 
-  // Time of the orbit bulletin (uint32_t)
-  // This is defined in seconds-since-the-epoch
-  // So, for the above example, we need to convert 2020/10/1 22:07:29 into seconds
-  // The original time library can do this for us:
-  struct tm t;
-  time_t t_of_day;
+// Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
+// Check the alignment afterwards - make sure that the satellite identifiers still ine up correctly (or convertAOPtoParameters will go horribly wrong!)
+// Check the alignment: " MA A 5 3 0 2020 10  1 22  7 29  7195.569  98.5114  336.036  -25.341  101.3592   0.00 MB 9 3 0 0 2020 10  1 23 21 58  7195.654  98.7194  331.991  -25.340  101.3604   0.00 MC B 7 3 0 2020 10  1 22 34 23  7195.569  98.6883  344.217  -25.340  101.3587   0.00 15 5 0 0 0 2020 10  1 22 44 11  7180.495  98.7089  308.255  -25.259  101.0408   0.00 18 8 0 0 0 2020 10  1 21 50 32  7225.981  99.0331  354.556  -25.498  102.0000  -0.79 19 C 6 0 0 2020 10  1 22  7  6  7226.365  99.1946  301.174  -25.499  102.0077  -0.54 SR D 4 3 0 2020 10  1 22 33 38  7160.233  98.5416  110.362  -25.154  100.6146  -0.12";
+const char AOP[] =      " MA A 5 3 0 2020 10  1 22  7 29  7195.569  98.5114  336.036  -25.341  101.3592   0.00 MB 9 3 0 0 2020 10  1 23 21 58  7195.654  98.7194  331.991  -25.340  101.3604   0.00 MC B 7 3 0 2020 10  1 22 34 23  7195.569  98.6883  344.217  -25.340  101.3587   0.00 15 5 0 0 0 2020 10  1 22 44 11  7180.495  98.7089  308.255  -25.259  101.0408   0.00 18 8 0 0 0 2020 10  1 21 50 32  7225.981  99.0331  354.556  -25.498  102.0000  -0.79 19 C 6 0 0 2020 10  1 22  7  6  7226.365  99.1946  301.174  -25.499  102.0077  -0.54 SR D 4 3 0 2020 10  1 22 33 38  7160.233  98.5416  110.362  -25.154  100.6146  -0.12";
 
-  t.tm_year = 2020-1900;  // Year - 1900
-  t.tm_mon = 9;           // Month, *** where 0 = jan ***
-  t.tm_mday = 1;          // Day of the month
-  t.tm_hour = 22;
-  t.tm_min = 7;
-  t.tm_sec = 29;
-  t.tm_isdst = 0;         // Is DST on? 1 = yes, 0 = no, -1 = unknown
-  t_of_day = mktime(&t);
+#include <time.h> // Needed to calculate the epoch
 
-  sat_bulletin.time_bulletin = (long)t_of_day;
+#include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
+ARTIC_R2 myARTIC;
 
-  // For the above example (2020/10/1 22:07:29), the answer should be 1601590049
-  // https://www.epochconverter.com/
-  Serial.print(F("The time of the orbit bulletin in seconds since the epoch is "));
-  Serial.println(sat_bulletin.time_bulletin);
+void setup()
+{
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println(F("ARGOS ARTIC R2 Example"));
 
-  // The six orbit parameters (for the above example)
-  sat_bulletin.params[0] = 7195.569; // Semi-major axis                (code notation: dga)     (km)    (float)
-  sat_bulletin.params[1] = 98.5114;  // Orbit inclination              (code notation: inc)     (deg)   (float)
-  sat_bulletin.params[2] = 336.036;  // Ascending node longitude       (code notation: lon_asc) (deg)   (float)
-  sat_bulletin.params[3] = -25.341;  // Ascending node longitude drift (code notation: d_noeud) (deg)   (float)
-  sat_bulletin.params[4] = 101.3592; // Orbital period                 (code notation: ts)      (min)   (float)
-  sat_bulletin.params[5] = 0.00;     // Semi-major axis drift          (code notation: gap)     (m/day) (float)
-  
+  myARTIC.enableDebugging(); // Enable debug messages to Serial
+
+  // Read the AOP, convert into bulletin_data_t
+  bulletin_data_t satelliteParameters[numARGOSsatellites]; // Create an array of bulletin_data_t to hold the parameters for all satellites
+  myARTIC.convertAOPtoParameters(AOP, satelliteParameters, numARGOSsatellites);
+
   // Epoch timestamp for the prediction
   // E.g. 2020/10/2 08:00:00 UTC/GMT should be 1601625600
   // https://www.epochconverter.com/
   // https://www.epochconverter.com/programming/c
-
-  t.tm_year = 2020-1900;  // Year - 1900
-  t.tm_mon = 9;           // Month, where 0 = jan
-  t.tm_mday = 2;          // Day of the month
-  t.tm_hour = 8;
-  t.tm_min = 0;
-  t.tm_sec = 0;
-  t.tm_isdst = 0;         // Is DST on? 1 = yes, 0 = no, -1 = unknown
-  t_of_day = mktime(&t);
   
-  long current_time = (long)t_of_day;
+  uint32_t current_time = myARTIC.convertGPSTimeToEpoch(2020, 10, 2, 8, 0, 0);
 
   Serial.print(F("The time of the prediction in seconds since the epoch is "));
   Serial.println(current_time);
+  Serial.print(F("The date and time of the prediction is "));
+  Serial.println(myARTIC.convertEpochToDateTime(current_time));
 
   // Prediction parameters
-  float min_elevation = 15.0; // Minimum satellite elevation (above the horizon)
-  uint8_t number_sat = 1; // Number of satellite
+  float min_elevation = 45.0; // Minimum satellite elevation (above the horizon)
   float lat = 48.8548; // Site latitude (C'est La Tour Eiffel naturellement!)
   float lon = 2.2945;  // Site longitude
 
@@ -139,28 +100,11 @@ void setup()
   // For this example, the answer should be:
   // Satellite | Start date/time | Middle date/time | End date/time | Duration | Middle elevation | Start azimuth | Middle azimuth | End azimuth
   // MA | 02/10/2020 08:48:04 | 02/10/2020 08:52:28 | 02/10/2020 08:56:51 | 00:08:47 | 76.69 | 18.28 | 104.36 | 189.26
-  uint32_t predicted_time = myARTIC.predictNextSatellitePass(&sat_bulletin, min_elevation, number_sat, lon, lat, current_time);
-  time_t pt_of_day = predicted_time; // Convert to YY/MM/DD HH:MM:SS
-
+  uint32_t predicted_time = myARTIC.predictNextSatellitePass(satelliteParameters, min_elevation, numARGOSsatellites, lon, lat, current_time);
   Serial.print(F("Predicted next pass will take place at "));
-  Serial.println((long)pt_of_day);
-
-  tm* pt = gmtime(&pt_of_day);
-
-  Serial.print(F("Predicted next pass will take place at "));
-  Serial.print(pt->tm_mday);
-  Serial.print(F("/"));
-  Serial.print(pt->tm_mon + 1); // Jan = 1
-  Serial.print(F("/"));
-  Serial.print(pt->tm_year + 1900);
-  Serial.print(F(" "));
-  Serial.print(pt->tm_hour);
-  Serial.print(F(":"));
-  Serial.print(pt->tm_min);
-  Serial.print(F(":"));
-  Serial.print(pt->tm_sec);
-  if (pt->tm_isdst == 1)
-    Serial.print(F(" DST"));
+  Serial.println(predicted_time);
+  Serial.print(F(" = "));
+  Serial.print(myARTIC.convertEpochToDateTime(predicted_time));
   Serial.println();
 }
 
