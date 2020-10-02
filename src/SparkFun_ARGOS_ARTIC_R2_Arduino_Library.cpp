@@ -2949,7 +2949,7 @@ void ARTIC_R2::invertPWNENpin(boolean invert)
 /*    ---------------------------------------------------------------   */
 
 // WARN: number_sat must be greater than 0
-uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time)
+uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time)
 {
     configurationParameters tab_PC[1];              /* array of configuration parameter */
     orbitParameters tab_PO[ARTIC_R2_MAX_NUM_SATS];
@@ -3404,14 +3404,30 @@ void ARTIC_R2::print_list(predictionParameters * p_pp,  int number_sat)
         _debugPort->print("sat ");
 				_debugPort->write(p_pp[i].sat[0]);
 				_debugPort->write(p_pp[i].sat[1]);
-				_debugPort->print("\tduration (min)  ");
-				_debugPort->print(p_pp[i].duree / 60);
-				_debugPort->print("\tsite max elevation (deg)  ");
+				_debugPort->print(" duration (min) ");
+				_debugPort->print((p_pp[i].duree) / 60);
+				_debugPort->print(":");
+				_debugPort->print((p_pp[i].duree) % 60);
+				_debugPort->print("\tsite max elevation (deg) ");
 				_debugPort->print(p_pp[i].site_max);
-				_debugPort->print("\ttime of next pass ");
+				_debugPort->print(" time of next pass ");
 				_debugPort->print(p_pp[i].tpp);
-				_debugPort->print("\tmiddle ");
-				_debugPort->println((p_pp[i].tpp + (p_pp[i].duree / 2))); // from 1990 to 1970
+				_debugPort->print(" middle ");
+				_debugPort->print((p_pp[i].tpp + (p_pp[i].duree / 2))); // from 1990 to 1970
+				_debugPort->print(" ");
+				time_t pt_of_day = (p_pp[i].tpp + (p_pp[i].duree / 2)); // Convert to YY/MM/DD HH:MM:SS
+			  tm* pt = gmtime(&pt_of_day);
+			  _debugPort->print(pt->tm_mday);
+			  _debugPort->print(F("/"));
+			  _debugPort->print(pt->tm_mon + 1); // Jan = 1
+			  _debugPort->print(F("/"));
+			  _debugPort->print(pt->tm_year + 1900);
+			  _debugPort->print(F(" "));
+			  _debugPort->print(pt->tm_hour);
+			  _debugPort->print(F(":"));
+			  _debugPort->print(pt->tm_min);
+			  _debugPort->print(F(":"));
+			  _debugPort->println(pt->tm_sec);
     }
 	}
 }
@@ -3421,27 +3437,27 @@ void ARTIC_R2::print_config(configurationParameters *p_pc)
 	if (_printDebug == true)
 	{
     _debugPort->print("\n------------CONFIG STRUCT------------\n\n");
-    _debugPort->print("lon ");
-		_debugPort->print(p_pc[0].pf_lon);
-		_debugPort->print("\tlat ");
-		_debugPort->println(p_pc[0].pf_lat);
+		_debugPort->print("lat ");
+		_debugPort->print(p_pc[0].pf_lat);
+    _debugPort->print("\tlon ");
+		_debugPort->println(p_pc[0].pf_lon);
     _debugPort->print("START: time ");
 		_debugPort->print(p_pc[0].time_start);
-    _debugPort->print("\tEND: time ");
+    _debugPort->print(" END: time ");
 		_debugPort->print(p_pc[0].time_end);
-    _debugPort->print("\ttime difference ");
+    _debugPort->print(" time difference ");
 		_debugPort->print(p_pc[0].s_differe);
-    _debugPort->print("\tsite min elevation ");
+    _debugPort->print(" site min elevation ");
 		_debugPort->print(p_pc[0].site_min_requis);
-    _debugPort->print("\tsite max elevation ");
+    _debugPort->print(" site max elevation ");
 		_debugPort->print(p_pc[0].site_max_requis);
-    _debugPort->print("\ttemporal margin ");
+    _debugPort->print(" temporal margin ");
 		_debugPort->print(p_pc[0].marge_temporelle);
-    _debugPort->print("\tgeog lat margin ");
+    _debugPort->print(" geog lat margin ");
 		_debugPort->print(p_pc[0].marge_geog_lat);
-    _debugPort->print("\tgeog lon margin ");
+    _debugPort->print(" geog lon margin ");
 		_debugPort->print(p_pc[0].marge_geog_lon);
-    _debugPort->print("\tmaximum number of passes ");
+    _debugPort->print(" maximum number of passes ");
 		_debugPort->println(p_pc[0].Npass_max);
 	}
 }
@@ -3459,17 +3475,96 @@ void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
         _debugPort->print("\tSTART: time ");
 				_debugPort->println(p_po[i].time_bul);
         _debugPort->print("VALUES: Semi-major axis ");
-				_debugPort->print(p_po[i].dga);
-				_debugPort->print("\tOrbit inclination ");
-				_debugPort->print(p_po[i].inc);
-				_debugPort->print("\tAscending node longitude ");
-				_debugPort->print(p_po[i].lon_asc);
-				_debugPort->print("\tAscending node longitude drift ");
-				_debugPort->print(p_po[i].d_noeud);
-				_debugPort->print("\tOrbital period ");
-				_debugPort->print(p_po[i].ts);
-				_debugPort->print("\tSemi-major axis drift ");
-				_debugPort->println(p_po[i].dgap);
+				_debugPort->print(p_po[i].dga, 3);
+				_debugPort->print(" Orbit inclination ");
+				_debugPort->print(p_po[i].inc, 4);
+				_debugPort->print(" Ascending node longitude ");
+				_debugPort->print(p_po[i].lon_asc, 3);
+				_debugPort->print(" Ascending node longitude drift ");
+				_debugPort->print(p_po[i].d_noeud, 3);
+				_debugPort->print(" Orbital period ");
+				_debugPort->print(p_po[i].ts, 4);
+				_debugPort->print(" Semi-major axis drift ");
+				_debugPort->println(p_po[i].dgap, 2);
     }
 	}
+}
+
+// Convert the AOP from text to bulletin_data_t
+void ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat)
+{
+	struct tm t;
+  time_t t_of_day;
+
+	uint32_t offsetAOP; // Offset into the AOP
+	for (uint8_t i = 0; i < number_sat; i++)
+	{
+		offsetAOP = i * ARTIC_R2_AOP_ENTRY_WIDTH;
+		satelliteParameters[i].sat[0] = AOP[offsetAOP + 1];
+		satelliteParameters[i].sat[1] = AOP[offsetAOP + 2];
+		t.tm_year = ((AOP[offsetAOP + 12] - 0x30) * 1000) + ((AOP[offsetAOP + 13] - 0x30) * 100) + ((AOP[offsetAOP + 14] - 0x30) * 10) + ((AOP[offsetAOP + 15] - 0x30)) - 1900;  // Year - 1900
+	  t.tm_mon = ((AOP[offsetAOP + 17] == 0x20 ? 0 : (AOP[offsetAOP + 17] - 0x30)) * 10) + (AOP[offsetAOP + 18] - 0x30) - 1; // Month, *** where 0 = jan ***
+	  t.tm_mday = ((AOP[offsetAOP + 20] == 0x20 ? 0 : (AOP[offsetAOP + 20] - 0x30)) * 10) + (AOP[offsetAOP + 21] - 0x30); // Day of the month
+	  t.tm_hour = ((AOP[offsetAOP + 23] == 0x20 ? 0 : (AOP[offsetAOP + 23] - 0x30)) * 10) + (AOP[offsetAOP + 24] - 0x30);
+	  t.tm_min = ((AOP[offsetAOP + 26] == 0x20 ? 0 : (AOP[offsetAOP + 26] - 0x30)) * 10) + (AOP[offsetAOP + 27] - 0x30);
+	  t.tm_sec = ((AOP[offsetAOP + 29] == 0x20 ? 0 : (AOP[offsetAOP + 29] - 0x30)) * 10) + (AOP[offsetAOP + 30] - 0x30);
+	  t.tm_isdst = 0;         // Is DST on? 1 = yes, 0 = no, -1 = unknown
+	  t_of_day = mktime(&t);
+		satelliteParameters[i].time_bulletin = (long)t_of_day;
+		satelliteParameters[i].params[0] = textToFloat(&AOP[offsetAOP + 32], 5, 3);
+		satelliteParameters[i].params[1] = textToFloat(&AOP[offsetAOP + 42], 3, 4);
+		satelliteParameters[i].params[2] = textToFloat(&AOP[offsetAOP + 51], 4, 3);
+		satelliteParameters[i].params[3] = textToFloat(&AOP[offsetAOP + 60], 4, 3);
+		satelliteParameters[i].params[4] = textToFloat(&AOP[offsetAOP + 69], 4, 4);
+		satelliteParameters[i].params[5] = textToFloat(&AOP[offsetAOP + 79], 3, 2);
+	}
+}
+
+// Convert AOP text to float
+float ARTIC_R2::textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP)
+{
+	float result = 0; // The result
+	boolean negative = false; // Is the number negative?
+	float multiplier = 1; // Multiplier (power of ten)
+	for (uint8_t i = digitsBeforeDP; i > 1; i--) multiplier *= 10; // Calculate the multiplier for the first digit
+	for (uint8_t offset = 0; offset < (digitsBeforeDP + digitsAfterDP + 1); offset++)
+	{
+		if (offset == digitsBeforeDP) continue; // Skip the DP. Don't decrease the multiplier.
+		else if (ptr[offset] == 0x20); // Skip spaces
+		else if (ptr[offset] == 0x2D) negative = true; // Check for minus sign
+		else result += (ptr[offset] - 0x30) * multiplier; // Add the digit
+		multiplier /= 10;
+	}
+	if (negative)
+		return (0 - result);
+	else
+		return (result);
+}
+
+// Convert epoch to date & time string
+char* const ARTIC_R2::convertEpochToDateTime(uint32_t epoch)
+{
+	static char dateTime[20]; // Storage for the date & time
+	time_t pt_of_day = epoch; // Convert to YY/MM/DD HH:MM:SS
+	tm* pt = gmtime(&pt_of_day);
+	sprintf(dateTime, "%02d/%02d/%04d %02d:%02d:%02d", pt->tm_mday, pt->tm_mon + 1, pt->tm_year + 1900, pt->tm_hour, pt->tm_min, pt->tm_sec);
+	return dateTime;
+}
+
+// Convert GPS date & time to epoch
+uint32_t ARTIC_R2::convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
+{
+	struct tm t;
+  time_t t_of_day;
+
+  t.tm_year = year - 1900;  // Year - 1900
+  t.tm_mon = month - 1;     // Month, where 0 = jan
+  t.tm_mday = day;          // Day of the month
+  t.tm_hour = hour;
+  t.tm_min = minute;
+  t.tm_sec = second;
+  t.tm_isdst = 0;           // Is DST on? 1 = yes, 0 = no, -1 = unknown
+  t_of_day = mktime(&t);
+
+  return ((uint32_t)t_of_day);
 }

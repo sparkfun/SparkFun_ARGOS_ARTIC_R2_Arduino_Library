@@ -66,6 +66,9 @@ _txPayloadBytes	KEYWORD2
 setTxPayload	KEYWORD2
 invertPWNENpin	KEYWORD2
 predictNextSatellitePass	KEYWORD2
+convertAOPtoParameters	KEYWORD2
+convertEpochToDateTime	KEYWORD2
+convertGPSTimeToEpoch	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
@@ -239,3 +242,4 @@ payload	LITERAL1
 FCS	LITERAL1
 
 bulletin_data_t	LITERAL1
+ARTIC_R2_AOP_ENTRY_WIDTH	LITERAL1

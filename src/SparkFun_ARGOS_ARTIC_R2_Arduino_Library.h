@@ -27,6 +27,8 @@
 #ifndef ARTIC_R2_H
 #define ARTIC_R2_H
 
+#include <time.h> // Needed for epoch calculation
+
 #include <SPI.h> // Needed for SPI communication
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
@@ -340,6 +342,8 @@ typedef struct //__attribute__((__packed__))
     float params[6];
 } bulletin_data_t;
 
+#define ARTIC_R2_AOP_ENTRY_WIDTH 85 // Width of one row in the AOP table from ARGOS Web
+
 /* +-------------------------------------------------------------------+*/
 /* +                      C O N S T A N T E S                          +*/
 /* +-------------------------------------------------------------------+*/
@@ -452,7 +456,10 @@ public:
 	void invertPWNENpin(boolean invert = true);
 
 	// Arribada / CLS Satellite Pass Predictor
-	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time);
+	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time);
+	void convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
+	char* const convertEpochToDateTime(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string
+	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 
 private:
 	//Variables
@@ -511,6 +518,7 @@ private:
 	void print_config(configurationParameters *p_pc);
 	void print_sat(orbitParameters *p_po, int number_sat);
 	int satellitePassPrediction(configurationParameters *p_pc, orbitParameters *p_po, predictionParameters *p_pp, int number_sat);
+	float textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP);
 };
 
 #endif
