@@ -2938,22 +2938,6 @@ void ARTIC_R2::invertPWNENpin(boolean invert)
 /*    *******************************************************    */
 /*    *******************************************************    */
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <math.h>
-// #include <string.h>
-// #include <stdint.h>
-//
-// #include "syshal_sat.h"
-
-// #include "prepas.h"
-
-// #pragma GCC diagnostic push
-// #pragma GCC diagnostic ignored "-Wdouble-promotion"
-// #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
-
-
-
 /* +-------------------------------------------------------------------+*/
 /* +                      variables externes                           +*/
 /* +-------------------------------------------------------------------+*/
@@ -2964,13 +2948,12 @@ void ARTIC_R2::invertPWNENpin(boolean invert)
 /*    ek_quant (1...12,2) pour les annees non bissextiles       */
 /*    ---------------------------------------------------------------   */
 
-
 // WARN: number_sat must be greater than 0
-uint32_t ARTIC_R2::next_predict(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time)
+uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time)
 {
-    pc  tab_PC[1];              /* array of configuration parameter */
-    po  tab_PO[SYSHAL_SAT_MAX_NUM_SATS];
-    pp tab_PP[SYSHAL_SAT_MAX_NUM_SATS];         /* array of result */
+    configurationParameters tab_PC[1];              /* array of configuration parameter */
+    orbitParameters tab_PO[ARTIC_R2_MAX_NUM_SATS];
+    predictionParameters tab_PP[ARTIC_R2_MAX_NUM_SATS];         /* array of result */
     tab_PC[0].pf_lon = lon;
     tab_PC[0].pf_lat = lat;
 
@@ -2987,11 +2970,9 @@ uint32_t ARTIC_R2::next_predict(bulletin_data_t *bulletin, float min_elevation, 
 
     tab_PC[0].Npass_max = 1;
 
-
-
-    po  *pt_po;                 /* pointer on tab_po            */
-    pc  *pt_pc;                 /* pointer on tab_pc            */
-    pp  *pt_pp;                 /* pointer on tab_pp            */
+    orbitParameters  *pt_po;          /* pointer on tab_po            */
+    configurationParameters  *pt_pc;  /* pointer on tab_pc            */
+    predictionParameters  *pt_pp;     /* pointer on tab_pp            */
 
     for (int i = 0; i < number_sat; ++i)
     {
@@ -3012,21 +2993,16 @@ uint32_t ARTIC_R2::next_predict(bulletin_data_t *bulletin, float min_elevation, 
     print_config(pt_pc);
     print_sat(pt_po, number_sat);
 
-    prepas(pt_pc, pt_po, pt_pp, number_sat);
+    satellitePassPrediction(pt_pc, pt_po, pt_pp, number_sat);
 
     print_list(pt_pp, number_sat);
 
-
     uint8_t index = select_closest(pt_pp, number_sat, current_time);
-
 
     return (pt_pp[index].tpp + (pt_pp[index].duree / 2));
 }
-int ARTIC_R2::prepas (    pc  * p_pc,
-                po  * p_po,
-                pp * p_pp,
-                int number_sat
-           )
+
+int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParameters * p_po, predictionParameters * p_pp, int number_sat)
 {
     /* -----------------------------------------------------------------
     C
@@ -3044,31 +3020,30 @@ int ARTIC_R2::prepas (    pc  * p_pc,
     C
     C -----------------------------------------------------------------*/
 
-
-    long    tpp;
+    long tpp;
     int duree;
     int duree_passage_MC; /* duree du passage Marges Comprises */
 
-    long    s_deb;      /* beginning of prediction (sec) */
-    long    s_fin;      /* end of prediction (sec) */
-    long    k;          /* number of revolution */
-    long    s_bul;      /* bulletin epoch (sec) */
-    long    t0;     /* date (sec) */
-    long    t1;     /* date (sec) */
-    long    t2;     /* date (sec) */
-    long    tmil[8];    /* date milieu du prochain passage/satellite */
+    long s_deb;      /* beginning of prediction (sec) */
+    long s_fin;      /* end of prediction (sec) */
+    long k;          /* number of revolution */
+    long s_bul;      /* bulletin epoch (sec) */
+    long t0;     /* date (sec) */
+    long t1;     /* date (sec) */
+    long t2;     /* date (sec) */
+    long tmil[8];    /* date milieu du prochain passage/satellite */
 
     int isat;
     int step = 0;
 
     int site;       /* min site */
     int passage;
-    float   d2;
-    float   d2_min;
-    float   d2_mem;
-    float   d2_mem_mem;
-    float   temp;
-    float   v;
+    float d2;
+    float d2_min;
+    float d2_mem;
+    float d2_mem_mem;
+    float temp;
+    float v;
 
     int duree_passage;
     long date_milieu_passage;
@@ -3389,7 +3364,7 @@ void ARTIC_R2::su_distance(   long    t1,     /* input */
 
 }
 
-uint8_t ARTIC_R2::select_closest(pp *pt_pp, int number_sat, uint32_t desired_time)
+uint8_t ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time)
 {
     uint32_t min = 0xFFFFFFFF;
     uint8_t index = 0;
@@ -3408,89 +3383,92 @@ uint8_t ARTIC_R2::select_closest(pp *pt_pp, int number_sat, uint32_t desired_tim
 
 		if (_printDebug == true)
     	_debugPort->print("SAT SELECTED: ");
-			_debugPort->print(pt_pp[index].sat);
-			_debugPort->print(",\t INDEX: ");
+			_debugPort->write(pt_pp[index].sat[0]);
+			_debugPort->write(pt_pp[index].sat[1]);
+			_debugPort->print("\tINDEX: ");
 			_debugPort->print(index);
-			_debugPort->print(",\t DESIRED TIME: ");
+			_debugPort->print("\tDESIRED TIME: ");
 			_debugPort->print(desired_time);
-			_debugPort->print("\t, NEXT PASS: ");
+			_debugPort->print("\tNEXT PASS: ");
 			_debugPort->println((pt_pp[index].tpp + (pt_pp[index].duree / 2)));
 
     return index;
 }
 
-void ARTIC_R2::print_list(pp * p_pp,  int number_sat)
+void ARTIC_R2::print_list(predictionParameters * p_pp,  int number_sat)
 {
 	if (_printDebug == true)
 	{
     for (int i = 0; i < number_sat; ++i)
     {
         _debugPort->print("sat ");
-				_debugPort->print(p_pp[i].sat);
-				_debugPort->print("  duration (min)  ");
+				_debugPort->write(p_pp[i].sat[0]);
+				_debugPort->write(p_pp[i].sat[1]);
+				_debugPort->print("\tduration (min)  ");
 				_debugPort->print(p_pp[i].duree / 60);
-				_debugPort->print("	 site Max (deg)  ");
+				_debugPort->print("\tsite max elevation (deg)  ");
 				_debugPort->print(p_pp[i].site_max);
-				_debugPort->print("	  \t prox: ");
+				_debugPort->print("\ttime of next pass ");
 				_debugPort->print(p_pp[i].tpp);
-				_debugPort->print("		\t middle ");
+				_debugPort->print("\tmiddle ");
 				_debugPort->println((p_pp[i].tpp + (p_pp[i].duree / 2))); // from 1990 to 1970
     }
 	}
 }
 
-void ARTIC_R2::print_config(pc *p_pc)
+void ARTIC_R2::print_config(configurationParameters *p_pc)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("------------CONFIG STRUCT------------\n\n\n");
+    _debugPort->print("\n------------CONFIG STRUCT------------\n\n");
     _debugPort->print("lon ");
 		_debugPort->print(p_pc[0].pf_lon);
-		_debugPort->println(", lat ");
-		_debugPort->print(p_pc[0].pf_lat);
+		_debugPort->print("\tlat ");
+		_debugPort->println(p_pc[0].pf_lat);
     _debugPort->print("START: time ");
 		_debugPort->print(p_pc[0].time_start);
-    _debugPort->print(", FIN: time ");
+    _debugPort->print("\tEND: time ");
 		_debugPort->print(p_pc[0].time_end);
-    _debugPort->print(", s_differe ");
+    _debugPort->print("\ttime difference ");
 		_debugPort->print(p_pc[0].s_differe);
-    _debugPort->print("\tsite_min_requis:  ");
+    _debugPort->print("\tsite min elevation ");
 		_debugPort->print(p_pc[0].site_min_requis);
-    _debugPort->print("\tsite_max_requis ");
+    _debugPort->print("\tsite max elevation ");
 		_debugPort->print(p_pc[0].site_max_requis);
-    _debugPort->print("\tmarge_temporelle ");
+    _debugPort->print("\ttemporal margin ");
 		_debugPort->print(p_pc[0].marge_temporelle);
-    _debugPort->print("\tmarge_geod_lat ");
+    _debugPort->print("\tgeog lat margin ");
 		_debugPort->print(p_pc[0].marge_geog_lat);
-    _debugPort->print("\tmarge_geog_lon ");
+    _debugPort->print("\tgeog lon margin ");
 		_debugPort->print(p_pc[0].marge_geog_lon);
-    _debugPort->print("\tnpass_max ");
+    _debugPort->print("\tmaximum number of passes ");
 		_debugPort->println(p_pc[0].Npass_max);
 	}
 }
 
-void ARTIC_R2::print_sat(po *p_po, int number_sat)
+void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("\n\n\n------------CONFIG SAT------------\n\n\n");
+    _debugPort->print("\n------------CONFIG SAT------------\n\n");
     for (int i = 0; i < number_sat; ++i)
     {
         _debugPort->print("NAME: ");
-				_debugPort->println(p_po[i].sat);
-        _debugPort->print("START: time ");
+				_debugPort->write(p_po[i].sat[0]);
+				_debugPort->write(p_po[i].sat[1]);
+        _debugPort->print("\tSTART: time ");
 				_debugPort->println(p_po[i].time_bul);
-        _debugPort->print("VALUES: dga ");
+        _debugPort->print("VALUES: Semi-major axis ");
 				_debugPort->print(p_po[i].dga);
-				_debugPort->print(" \tinc ");
+				_debugPort->print("\tOrbit inclination ");
 				_debugPort->print(p_po[i].inc);
-				_debugPort->print(" \t  lon_asc ");
+				_debugPort->print("\tAscending node longitude ");
 				_debugPort->print(p_po[i].lon_asc);
-				_debugPort->print(" \t d_noeud ");
+				_debugPort->print("\tAscending node longitude drift ");
 				_debugPort->print(p_po[i].d_noeud);
-				_debugPort->print(" \t ts ");
+				_debugPort->print("\tOrbital period ");
 				_debugPort->print(p_po[i].ts);
-				_debugPort->print(" \t, dgap ");
+				_debugPort->print("\tSemi-major axis drift ");
 				_debugPort->println(p_po[i].dgap);
     }
 	}

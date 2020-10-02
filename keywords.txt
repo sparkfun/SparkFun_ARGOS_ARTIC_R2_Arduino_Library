@@ -65,6 +65,7 @@ _txPayloadLengthBits	KEYWORD2
 _txPayloadBytes	KEYWORD2
 setTxPayload	KEYWORD2
 invertPWNENpin	KEYWORD2
+predictNextSatellitePass	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)
@@ -236,3 +237,5 @@ ADCS	LITERAL1
 service	LITERAL1
 payload	LITERAL1
 FCS	LITERAL1
+
+bulletin_data_t	LITERAL1

@@ -279,17 +279,16 @@ typedef struct {
 
 // Satellite Pass Prediction - taken from Arribada Horizon
 // Thank you Arribada!
-// Presumably written by CLS
+// Originally written by CLS
+// Code is taken from Arribada's prepas.h
 
-// File was originally called: prepas.h
+#define ARTIC_R2_MAX_NUM_SATS (8)
 
-#define SYSHAL_SAT_MAX_NUM_SATS (8)
-
-#define MAXLU 132
+#define ARTIC_R2_MAXLU 132
 #define sortie_erreur -1
 
-#ifndef SYSHAL_SAT_MINIMUM_PAS
-#define SYSHAL_SAT_MINIMUM_PAS 1
+#ifndef ARTIC_R2_MINIMUM_PAS
+#define ARTIC_R2_MINIMUM_PAS 1
 #endif
 
 typedef struct
@@ -305,7 +304,7 @@ typedef struct
     float marge_geog_lat;    /* marge geographique (deg) */
     float marge_geog_lon;    /* marge geographique (deg) */
     int   Npass_max;         /* nombre de passages max par satellite */
-} pc;
+} configurationParameters;
 
 typedef struct
 {
@@ -316,8 +315,8 @@ typedef struct
     float lon_asc;    /* longitude of ascending node (deg) */
     float d_noeud;    /* asc. node drift during one revolution (deg) */
     float ts;         /* orbit period (min) */
-    float dgap;       /* drift of semi-major axis (m/jour) */
-} po;
+    float dgap;       /* drift of semi-major axis (m/day) */
+} orbitParameters;
 
 typedef struct
 {
@@ -325,12 +324,19 @@ typedef struct
     long tpp;        /* date du prochain passage (sec90) */
     int  duree;      /* duree (sec) */
     int  site_max;   /* site max dans le passage (deg) */
-} pp;
+} predictionParameters;
 
-typedef struct __attribute__((__packed__))
+typedef struct //__attribute__((__packed__))
 {
-    char sat[2];
-    uint32_t time_bulletin;
+    char sat[2]; // The two-character satellite identifier
+    uint32_t time_bulletin; // Time of the orbit bulletin in seconds since the epoch
+		// The params are:
+		// semi-major axis (km)
+		// orbit inclination (deg)
+		// longitude of ascending node (deg)
+		// asc. node drift during one revolution (deg)
+		// orbit period (min)
+		// drift of semi-major axis (m/day)
     float params[6];
 } bulletin_data_t;
 
@@ -340,16 +346,16 @@ typedef struct __attribute__((__packed__))
 
 #define SECONDS_IN_DAY (24 * 60 * 60)
 
-const   float   pi  = 3.1415926535;     /* Pi     value     */
-const   float   demi_pi = 1.570796327;          /* Pi/2   value     */
-const   float   two_pi  = 6.283185307;          /* 2*pi   value     */
-const   float   deg_rad = 0.017453292;          /* pi/180 value     */
-const   float   rad_deg = 57.29577951;          /* 180/pi value     */
+const   float   pi  = 3.1415926535;          /* Pi     value     */
+const   float   demi_pi = 1.570796327;       /* Pi/2   value     */
+const   float   two_pi  = 6.283185307;       /* 2*pi   value     */
+const   float   deg_rad = 0.017453292;       /* pi/180 value     */
+const   float   rad_deg = 57.29577951;       /* 180/pi value     */
 
-const   int pas = SYSHAL_SAT_MINIMUM_PAS;                   /* en (sec)     */
+const   int pas = ARTIC_R2_MINIMUM_PAS;      /* en (sec)     */
 
-const   float   rt  = 6378.137;             /* Earth radius     */
-const   float   rs  = 7200;         /* Orbit radius     */
+const   float   rt  = 6378.137;              /* Earth radius     */
+const   float   rs  = 7200;                  /* Orbit radius     */
 
 const int TIME_CONVERTOR = 631152000; /* Change apoch from 1990 to 1970 */
 
@@ -446,8 +452,7 @@ public:
 	void invertPWNENpin(boolean invert = true);
 
 	// Arribada / CLS Satellite Pass Predictor
-	uint32_t next_predict(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time);
-	int prepas (pc *p_pc, po *p_po, pp *p_pp, int number_sat);
+	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation,  uint8_t number_sat, float lon, float lat, long current_time);
 
 private:
 	//Variables
@@ -501,10 +506,11 @@ private:
 	                 float  wt,
 
 	                 float  *d2);       /* output */
-	uint8_t select_closest(pp *pt_pp, int number_sat, uint32_t desired_time);
-	void print_list(pp * p_pp,  int number_sat);
-	void print_config(pc    *p_pc);
-	void print_sat(po *p_po, int number_sat);
+	uint8_t select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time);
+	void print_list(predictionParameters * p_pp,  int number_sat);
+	void print_config(configurationParameters *p_pc);
+	void print_sat(orbitParameters *p_po, int number_sat);
+	int satellitePassPrediction(configurationParameters *p_pc, orbitParameters *p_po, predictionParameters *p_pp, int number_sat);
 };
 
 #endif
