@@ -457,7 +457,7 @@ public:
 
 	// Arribada / CLS Satellite Pass Predictor
 	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time);
-	void convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
+	boolean convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
 	char* const convertEpochToDateTime(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 

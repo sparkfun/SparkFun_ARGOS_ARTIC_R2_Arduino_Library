@@ -3491,8 +3491,9 @@ void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
 }
 
 // Convert the AOP from text to bulletin_data_t
-void ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat)
+boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat)
 {
+	boolean result = true;
 	struct tm t;
   time_t t_of_day;
 
@@ -3500,8 +3501,10 @@ void ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satellit
 	for (uint8_t i = 0; i < number_sat; i++)
 	{
 		offsetAOP = i * ARTIC_R2_AOP_ENTRY_WIDTH;
+		// Extract the satellite identifier
 		satelliteParameters[i].sat[0] = AOP[offsetAOP + 1];
 		satelliteParameters[i].sat[1] = AOP[offsetAOP + 2];
+		// Extract the date (epoch) of the AOP
 		t.tm_year = ((AOP[offsetAOP + 12] - 0x30) * 1000) + ((AOP[offsetAOP + 13] - 0x30) * 100) + ((AOP[offsetAOP + 14] - 0x30) * 10) + ((AOP[offsetAOP + 15] - 0x30)) - 1900;  // Year - 1900
 	  t.tm_mon = ((AOP[offsetAOP + 17] == 0x20 ? 0 : (AOP[offsetAOP + 17] - 0x30)) * 10) + (AOP[offsetAOP + 18] - 0x30) - 1; // Month, *** where 0 = jan ***
 	  t.tm_mday = ((AOP[offsetAOP + 20] == 0x20 ? 0 : (AOP[offsetAOP + 20] - 0x30)) * 10) + (AOP[offsetAOP + 21] - 0x30); // Day of the month
@@ -3511,13 +3514,38 @@ void ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satellit
 	  t.tm_isdst = 0;         // Is DST on? 1 = yes, 0 = no, -1 = unknown
 	  t_of_day = mktime(&t);
 		satelliteParameters[i].time_bulletin = (long)t_of_day;
-		satelliteParameters[i].params[0] = textToFloat(&AOP[offsetAOP + 32], 5, 3);
-		satelliteParameters[i].params[1] = textToFloat(&AOP[offsetAOP + 42], 3, 4);
-		satelliteParameters[i].params[2] = textToFloat(&AOP[offsetAOP + 51], 4, 3);
-		satelliteParameters[i].params[3] = textToFloat(&AOP[offsetAOP + 60], 4, 3);
-		satelliteParameters[i].params[4] = textToFloat(&AOP[offsetAOP + 69], 4, 4);
-		satelliteParameters[i].params[5] = textToFloat(&AOP[offsetAOP + 79], 3, 2);
+		// Extract the six parameters
+		satelliteParameters[i].params[0] = textToFloat(&AOP[offsetAOP + 32], 5, 3); // Semi-major axis (km)
+		satelliteParameters[i].params[1] = textToFloat(&AOP[offsetAOP + 42], 3, 4); // Orbit inclination (deg)
+		satelliteParameters[i].params[2] = textToFloat(&AOP[offsetAOP + 51], 4, 3); // Ascending node longitude (deg)
+		satelliteParameters[i].params[3] = textToFloat(&AOP[offsetAOP + 60], 4, 3); // Ascending node longitude drift (deg)
+		satelliteParameters[i].params[4] = textToFloat(&AOP[offsetAOP + 69], 4, 4); // Orbital period (min)
+		satelliteParameters[i].params[5] = textToFloat(&AOP[offsetAOP + 79], 3, 2); // Semi-major axis drift (m/day)
+		// Basic syntax checking - just to make sure nothing bag has happened and that the AOP appears to be correctly formatted
+		// Check that the first digit of the satellite identifier is M or 1 or S
+		if ((satelliteParameters[i].sat[0] != 'M') && (satelliteParameters[i].sat[0] != '1') && (satelliteParameters[i].sat[0] != 'S'))
+		{
+			if (_printDebug == true)
+				_debugPort->print("convertAOPtoParameters: invalid satellite identifier!");
+			result = false;
+		}
+		// Check that the date (epoch) of the AOP is >= 2020/1/1 00:00:00 and <= 2040/1/1 00:00:00
+		if ((satelliteParameters[i].time_bulletin < 1577836800) || (satelliteParameters[i].time_bulletin > 2208988800))
+		{
+			if (_printDebug == true)
+				_debugPort->print("convertAOPtoParameters: AOP date (epoch) is invalid!");
+			result = false;
+		}
+		// Check that the Semi-major axis is >= 6000 and <= 8000
+		if ((satelliteParameters[i].params[0] < 6000) || (satelliteParameters[i].params[0] > 8000))
+		{
+			if (_printDebug == true)
+				_debugPort->print("convertAOPtoParameters: semi-major axis is invalid!");
+			result = false;
+		}
 	}
+
+	return (result);
 }
 
 // Convert AOP text to float

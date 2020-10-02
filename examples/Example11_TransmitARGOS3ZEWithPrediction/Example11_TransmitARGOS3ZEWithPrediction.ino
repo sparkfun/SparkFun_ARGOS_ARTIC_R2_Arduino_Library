@@ -95,6 +95,7 @@ uint8_t PWR_EN_Pin = 9;
 #define wait_for_GPS        2 // Wait for the GPS time and position to be valid
 #define calculate_next_pass 3 // Read the GPS time, lat and lon. Calculate the next satellite pass
 #define wait_for_next_pass  4 // Wait for the next satellite pass
+#define ARTIC_TX            5 // Start the ARTIC TX
 int loop_step = start_ARTIC; // Make sure loop_step is set to start_ARTIC
 
 uint32_t nextSatellitePass; // Time of the next satellite pass
@@ -129,25 +130,6 @@ void setup()
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
   {
     Serial.println("ARTIC R2 not detected. Freezing...");
-    while (1)
-      ; // Do nothing more
-  }
-
-  // Start the ARTIC in Transmit One Package And Go Idle mode
-  result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);
-  if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
-  {
-    Serial.println();
-    Serial.println("<sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) failed>");
-    Serial.println();
-    myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-    Serial.println(F("ARTIC R2 Firmware Status:"));
-    myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-    Serial.println();
-    Serial.println(F("ARTIC_R2_MCU_Command_Result:"));
-    myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
-    Serial.println();
-    Serial.println("</sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) failed> Freezing...");
     while (1)
       ; // Do nothing more
   }
@@ -250,10 +232,10 @@ void loop()
       break;
     
     // ************************************************************************************************
-    // Wait for the GPS time to be valid and a 3D position fix
+    // Wait for the GPS time to be valid and for the position fix to be 3D
     case wait_for_GPS:
 
-      // Read the GPS. Check that the time is valid. It should be by now as we have just waited for the ARTIC to start!
+      // Read the GPS. Check that the time is valid. It should be by now as we have waited for the ARTIC to start!
       boolean timeValid = myGPS.getTimeValid();
       timeValid = myGPS.getTimeValid(); // Call getTimeValid twice to ensure we have fresh data
       Serial.print(F("GPS time is "));
@@ -286,7 +268,12 @@ void loop()
 
       // Read the AOP, convert into bulletin_data_t
       bulletin_data_t satelliteParameters[numARGOSsatellites]; // Create an array of bulletin_data_t to hold the parameters for all satellites
-      myARTIC.convertAOPtoParameters(AOP, satelliteParameters, numARGOSsatellites);
+      if (myARTIC.convertAOPtoParameters(AOP, satelliteParameters, numARGOSsatellites) == false)
+      {
+        Serial.println("convertAOPtoParameters failed! Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
 
       // Read the GPS time, latitude and longitude. Convert to epoch.
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
@@ -302,13 +289,13 @@ void loop()
       float min_elevation = 45.0; // Minimum satellite elevation (above the horizon) - REDUCE THIS IF YOU HAVE A CLEAR VIEW TO THE HORIZON
 
       // Predict the next satellite pass
-      uint32_t nextSatellitePass = myARTIC.predictNextSatellitePass(satelliteParameters, min_elevation, numARGOSsatellites, lon, lat, epochNow);
+      nextSatellitePass = myARTIC.predictNextSatellitePass(satelliteParameters, min_elevation, numARGOSsatellites, lon, lat, epochNow);
 
       // Print the prediction
       Serial.print(F("The next satellite pass will take place at: "));
-      Serial.println(myARTIC.convertEpochToDateTime(predicted_time));
+      Serial.println(myARTIC.convertEpochToDateTime(nextSatellitePass));
       Serial.print(F("The number of seconds since the epoch will be: "));
-      Serial.println(predicted_time);
+      Serial.println(nextSatellitePass);
       Serial.println();
 
       loop_step = wait_for_next_pass; // Move on
@@ -322,43 +309,87 @@ void loop()
       // Read the GPS time
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
+      // Calculate how many seconds remain until the satellite is in view
+      int32_t secsRemaining = (int32_t)nextSatellitePass - (int32_t)epochNow;
+      Serial.print(F("The satellite will be in view in "));
+      Serial.print(secsRemaining);
+      Serial.println(F(" seconds"));
+
+      // Check if we should start the TX
+      if (secsRemaining <= 0)
+      {
+        Serial.println();
+        Serial.println(F("*** STARTING TX ***"));
+        Serial.println();
+        loop_step = ARTIC_TX; // Move on
+      }
+
+      break;
+      
+    // ************************************************************************************************
+    // Start the ARTIC in Transmit One Package And Go Idle mode
+    case ARTIC_TX:
     
-  delay(1000);
+      // Tell the ARTIC to do its thing!
+      ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);
+      if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
+      {
+        Serial.println("sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE) failed!");
+        Serial.println();
+        myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
+        Serial.println(F("ARTIC R2 Firmware Status:"));
+        myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+        Serial.println();
+        Serial.println(F("ARTIC_R2_MCU_Command_Result:"));
+        myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
+        Serial.println();
+        Serial.println("Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
 
-  Serial.println();
+      loop_step = wait_for_ARTIC_TX; // Move on
 
-  // Read and print the ARTIC R2 status register
-  ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-  Serial.println(F("ARTIC R2 Firmware Status:"));
-  myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+      break;
+    
+    // ************************************************************************************************
+    // Start the ARTIC in Transmit One Package And Go Idle mode
+    case wait_for_ARTIC_TX:
+    
+      // Read and print the ARTIC R2 status register
+      ARTIC_R2_Firmware_Status status;
+      myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
+      Serial.println(F("ARTIC R2 Firmware Status:"));
+      myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
+    
+      if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when TX is finished
+      {
+        Serial.println(F("INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!"));
+      }
+    
+      if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
+      {
+        Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened... ARGOS PTT-ZE is as simple as it gets!)"));
+      }
+    
+      Serial.println();
+    
+      // Read and print the instruction progress
+      ARTIC_R2_MCU_Instruction_Progress progress;
+      // checkMCUinstructionProgress will return true if the instruction is complete
+      boolean instructionComplete = myARTIC.checkMCUinstructionProgress(&progress); // Check the instruction progress
+      Serial.println(F("ARTIC R2 instruction progress:"));
+      myARTIC.printInstructionProgress(progress); // Pretty-print the progress to Serial
+    
+      if (instructionComplete)
+      {
+        Serial.println();
+        Serial.println(F("Transmission is complete!"));
+        Serial.println();
+        
+        loop_step = wait_for_GPS; // Do over...
+      }
 
-  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when TX is finished
-  {
-    Serial.println(F("INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!"));
-  }
-
-  if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
-  {
-    Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened... ARGOS 4 VLD is as simple as it gets!)"));
-  }
-
-  Serial.println();
-
-  // Read and print the instruction progress
-  ARTIC_R2_MCU_Instruction_Progress progress;
-  // checkMCUinstructionProgress will return true if the instruction is complete
-  boolean instructionComplete = myARTIC.checkMCUinstructionProgress(&progress); // Check the instruction progress
-  Serial.println(F("ARTIC R2 instruction progress:"));
-  myARTIC.printInstructionProgress(progress); // Pretty-print the progress to Serial
-
-  if (instructionComplete)
-  {
-    Serial.println();
-    Serial.println(F("Transmission is complete!"));
-    Serial.println();
-    Serial.println(F("We are done. Freezing..."));
-    while (1)
-      ; // Do nothing more
+      break;
   }
 }
