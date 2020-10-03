@@ -305,12 +305,14 @@ void loop()
           ; // Do nothing more
       }
 
+/*
       // Pretty-print the AOP for all satellites
       for (uint8_t i = 0; i < numARGOSsatellites; i++)
       {
         myARTIC.printAOPbulletin(satelliteParameters[i]);
         Serial.println();
       }
+*/
 
       // Read the GPS time, latitude and longitude. Convert to epoch.
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
