@@ -396,20 +396,20 @@ void loop()
     case ARTIC_TX:
     {
       // Update the GPS lat and lon - in case we have moved since we calculated the next pass
-      float lat = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
-      lat = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
-      float lon = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
+      float lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
+      lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
+      float lon_tx = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
 
       // Print the lat and lon
       Serial.print(F("GPS Latitude is: "));
-      Serial.println(lat, 4);
+      Serial.println(lat_tx, 4);
       Serial.print(F("GPS Longitude is: "));
-      Serial.println(lon, 4);
+      Serial.println(lon_tx, 4);
       Serial.println();
 
       // Configure the Tx payload for ARGOS 3 PTT-A3 using our platform ID and the latest lat/lon
       // TO DO: check if the payload is cleared from memory after transmission is complete. The code assumes it isn't.
-      if (myARTIC.setPayloadARGOS3LatLon(PLATFORM_ID, lat, lon) == false)
+      if (myARTIC.setPayloadARGOS3LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
       {
         Serial.println(F("setPayloadARGOS3LatLon failed! Freezing..."));
         while (1)

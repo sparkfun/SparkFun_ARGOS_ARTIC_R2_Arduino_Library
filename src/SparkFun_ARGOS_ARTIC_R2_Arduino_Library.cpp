@@ -3033,55 +3033,74 @@ void ARTIC_R2::invertPWNENpin(boolean invert)
 // WARN: number_sat must be greater than 0
 uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time)
 {
-    configurationParameters tab_PC[1];              /* array of configuration parameter */
-    orbitParameters tab_PO[ARTIC_R2_MAX_NUM_SATS];
-    predictionParameters tab_PP[ARTIC_R2_MAX_NUM_SATS];         /* array of result */
-    tab_PC[0].pf_lon = lon;
-    tab_PC[0].pf_lat = lat;
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: start");
 
-    tab_PC[0].time_start = current_time;
-    tab_PC[0].time_end = current_time + SECONDS_IN_DAY;
-    tab_PC[0].s_differe = 0;
+  configurationParameters tab_PC[1];              /* array of configuration parameter */
+  orbitParameters tab_PO[ARTIC_R2_MAX_NUM_SATS];
+  predictionParameters tab_PP[ARTIC_R2_MAX_NUM_SATS];         /* array of result */
+  tab_PC[0].pf_lon = lon;
+  tab_PC[0].pf_lat = lat;
 
-    tab_PC[0].site_min_requis = min_elevation;
-    tab_PC[0].site_max_requis = 90.0f;
+  tab_PC[0].time_start = current_time;
+  tab_PC[0].time_end = current_time + SECONDS_IN_DAY;
+  tab_PC[0].s_differe = 0;
 
-    tab_PC[0].marge_temporelle = 0;
-    tab_PC[0].marge_geog_lat = 0;
-    tab_PC[0].marge_geog_lon = 0;
+  tab_PC[0].site_min_requis = min_elevation;
+  tab_PC[0].site_max_requis = 90.0f;
 
-    tab_PC[0].Npass_max = 1;
+  tab_PC[0].marge_temporelle = 0;
+  tab_PC[0].marge_geog_lat = 0;
+  tab_PC[0].marge_geog_lon = 0;
 
-    orbitParameters  *pt_po;          /* pointer on tab_po            */
-    configurationParameters  *pt_pc;  /* pointer on tab_pc            */
-    predictionParameters  *pt_pp;     /* pointer on tab_pp            */
+  tab_PC[0].Npass_max = 1;
 
-    for (int i = 0; i < number_sat; ++i)
-    {
-        memcpy(tab_PO[i].sat, bulletin[i].sat, 2);
-        tab_PO[i].time_bul = bulletin[i].time_bulletin;
-        tab_PO[i].dga = bulletin[i].params[0];
-        tab_PO[i].inc = bulletin[i].params[1];
-        tab_PO[i].lon_asc = bulletin[i].params[2];
-        tab_PO[i].d_noeud = bulletin[i].params[3];
-        tab_PO[i].ts = bulletin[i].params[4];
-        tab_PO[i].dgap = bulletin[i].params[5];
-    }
+  orbitParameters  *pt_po;          /* pointer on tab_po            */
+  configurationParameters  *pt_pc;  /* pointer on tab_pc            */
+  predictionParameters  *pt_pp;     /* pointer on tab_pp            */
 
-    pt_pc  = &tab_PC[0];
-    pt_po  = &tab_PO[0];
-    pt_pp  = &tab_PP[0];
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: copying bulletin[] into tab_PO[]");
 
-    print_config(pt_pc);
-    print_sat(pt_po, number_sat);
+  for (int i = 0; i < number_sat; ++i)
+  {
+      tab_PO[i].sat[0], bulletin[i].sat[0];
+			tab_PO[i].sat[1], bulletin[i].sat[1];
+      tab_PO[i].time_bul = bulletin[i].time_bulletin;
+      tab_PO[i].dga = bulletin[i].params[0];
+      tab_PO[i].inc = bulletin[i].params[1];
+      tab_PO[i].lon_asc = bulletin[i].params[2];
+      tab_PO[i].d_noeud = bulletin[i].params[3];
+      tab_PO[i].ts = bulletin[i].params[4];
+      tab_PO[i].dgap = bulletin[i].params[5];
+  }
 
-    satellitePassPrediction(pt_pc, pt_po, pt_pp, number_sat);
+  pt_pc  = &tab_PC[0];
+  pt_po  = &tab_PO[0];
+  pt_pp  = &tab_PP[0];
 
-    print_list(pt_pp, number_sat);
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: calling print_config and print_sat");
 
-    uint8_t index = select_closest(pt_pp, number_sat, current_time);
+  print_config(pt_pc);
+  print_sat(pt_po, number_sat);
 
-    return (pt_pp[index].tpp + (pt_pp[index].duree / 2));
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: calling satellitePassPrediction");
+
+  satellitePassPrediction(pt_pc, pt_po, pt_pp, number_sat);
+
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: calling print_list");
+
+  print_list(pt_pp, number_sat);
+
+	// if (_printDebug == true)
+	// 	_debugPort->println("predictNextSatellitePass: calling select_closest");
+
+  uint8_t index = select_closest(pt_pp, number_sat, current_time);
+
+  return (pt_pp[index].tpp + (pt_pp[index].duree / 2));
 }
 
 int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParameters * p_po, predictionParameters * p_pp, int number_sat)
@@ -3464,6 +3483,7 @@ uint8_t ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, ui
     }
 
 		if (_printDebug == true)
+		{
     	_debugPort->print("SAT SELECTED: ");
 			_debugPort->write(pt_pp[index].sat[0]);
 			_debugPort->write(pt_pp[index].sat[1]);
@@ -3473,6 +3493,7 @@ uint8_t ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, ui
 			_debugPort->print(desired_time);
 			_debugPort->print("\tNEXT PASS: ");
 			_debugPort->println((pt_pp[index].tpp + (pt_pp[index].duree / 2)));
+		}
 
     return index;
 }
