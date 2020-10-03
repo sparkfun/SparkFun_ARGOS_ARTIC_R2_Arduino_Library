@@ -15,6 +15,7 @@
     downloads messages as they are received;
     clears INT1 each time a message is downloaded.
   LED_BUILTIN will illuminate when a satellite is detected.
+  Messages are parsed for UTC time and AOP data.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -121,7 +122,7 @@ void setup()
   // Clear INT1
   if (myARTIC.clearInterrupts(1) == false)
   {
-    Serial.println("clearInterrupts failed. Freezing...");
+    Serial.println("clearInterrupts failed!");
     //while (1)
     //  ; // Do nothing more
   }  
@@ -225,6 +226,163 @@ void loop()
         Serial.printf("%02X", downlinkMessage.payload[i]);
       }
       Serial.println();
+
+      // Parse for UTC allcast
+      // Taken from KINEIS-MU-2019-0094 and AS3-SP-516-2095-CNES
+      if ((downlinkMessage.addresseeIdentification == 0x00000E1) && (downlinkMessage.service == 0x08))
+      {
+        Serial.print(F("UTC allcast received: Year="));
+        Serial.print(downlinkMessage.payload[0] >> 4); Serial.print(downlinkMessage.payload[0] & 0x0F);
+        Serial.print(downlinkMessage.payload[1] >> 4); Serial.print(downlinkMessage.payload[1] & 0x0F);
+        Serial.print(F(" Day of year="));
+        Serial.print(downlinkMessage.payload[2] >> 4); Serial.print(downlinkMessage.payload[2] & 0x0F);
+        Serial.print(downlinkMessage.payload[3] >> 4);
+        Serial.print(F(" Time="));
+        Serial.print(downlinkMessage.payload[3] & 0x0F); Serial.print(downlinkMessage.payload[4] >> 4);
+        Serial.print(F(":"));
+        Serial.print(downlinkMessage.payload[4] & 0x0F); Serial.print(downlinkMessage.payload[5] >> 4);
+        Serial.print(F(":"));
+        Serial.print(downlinkMessage.payload[5] & 0x0F); Serial.print(downlinkMessage.payload[6] >> 4);
+        Serial.print(F("."));
+        Serial.print(downlinkMessage.payload[6] & 0x0F); Serial.print(downlinkMessage.payload[7] >> 4);
+        Serial.println(downlinkMessage.payload[7] & 0x0F);
+      }
+
+      // Parse for AOP data
+      // Taken from KINEIS-MU-2019-0094 and AS3-SP-516-2095-CNES
+      if ((downlinkMessage.addresseeIdentification == 0x00000BE) && (downlinkMessage.service == 0x00))
+      {
+        bulletin_data_t bulletin; // Assemble the data as a bulletin_data_t which could then be used for satellite pass prediction (see the later examples)
+        
+        Serial.print(F("Satellite orbit parameters received: Satellite ID="));
+        switch (downlinkMessage.payload[0] >> 4)
+        {
+          // The full list from KINEIS-MU-2019-0094 is as follows:
+          // 0x1 CDARS
+          // 0x2 OCEANSAT-3
+          // 0x3 METOP-SG1B
+          // 0x4 METOP-SG2B
+          // 0x5 NOAA K
+          // 0x6 ANGELS
+          // 0x8 NOAA N
+          // 0x9 METOP B
+          // 0xA METOP A
+          // 0xB METOP C
+          // 0xC NOAA N' ( = NP ? )
+          // 0xD SARAL
+
+          // Process the 'known' satellites
+          // The two character satellite identifiers are:
+          // MA : METOP-A
+          // MB : METOP-B
+          // MC : METOP-C
+          // NK : NOAA-15 (appears as 15 in the AOP)
+          // NN : NOAA-18 (appears as 18 in the AOP)
+          // NP : NOAA-19 (appears as 19 in the AOP)
+          // SR : SARAL
+
+          case 0xA:
+            Serial.println(F("METOP-A"));
+            bulletin.sat[0] = 'M'; bulletin.sat[1] = 'A';
+            break;
+          case 0x9:
+            Serial.println(F("METOP-B"));
+            bulletin.sat[0] = 'M'; bulletin.sat[1] = 'B';
+            break;
+          case 0xB:
+            Serial.println(F("METOP-C"));
+            bulletin.sat[0] = 'M'; bulletin.sat[1] = 'C';
+            break;
+          case 0x5:
+            Serial.println(F("NOAA K"));
+            bulletin.sat[0] = '1'; bulletin.sat[1] = '5';
+            break;
+          case 0x8:
+            Serial.println(F("NOAA N"));
+            bulletin.sat[0] = '1'; bulletin.sat[1] = '8';
+            break;
+          case 0xC:
+            Serial.println(F("NOAA N\'")); // TO DO: check this!
+            bulletin.sat[0] = '1'; bulletin.sat[1] = '9';
+            break;
+          case 0xD:
+            Serial.println(F("SARAL"));
+            bulletin.sat[0] = 'S'; bulletin.sat[1] = 'R';
+            break;
+          default: // We don't know the two character ID for the other satellites!
+            Serial.print(F("0x"));
+            Serial.println((downlinkMessage.payload[0] >> 4), HEX);
+            bulletin.sat[0] = '?'; bulletin.sat[1] = '?';
+            break;
+        }
+        
+        // Extract the date and time of the bulletin
+        uint16_t year = 2000;
+        year += (((downlinkMessage.payload[0] & 0x03) << 2) | (downlinkMessage.payload[1] >> 6)) * 10;
+        year += ((downlinkMessage.payload[1] & 0x3C) >> 2);
+        uint16_t day_of_year = (((downlinkMessage.payload[1] & 0x03) << 2) | (downlinkMessage.payload[2] >> 6)) * 100;
+        day_of_year += ((downlinkMessage.payload[2] & 0x3C) >> 2) * 10;
+        day_of_year += (((downlinkMessage.payload[2] & 0x03) << 2) | (downlinkMessage.payload[3] >> 6));
+        uint8_t hour = ((downlinkMessage.payload[3] & 0x3C) >> 2) * 10;
+        hour += (((downlinkMessage.payload[3] & 0x03) << 2) | (downlinkMessage.payload[4] >> 6));
+        uint8_t minute = ((downlinkMessage.payload[4] & 0x3C) >> 2) * 10;
+        minute += (((downlinkMessage.payload[4] & 0x03) << 2) | (downlinkMessage.payload[5] >> 6));
+        uint8_t second = ((downlinkMessage.payload[5] & 0x3C) >> 2) * 10;
+        second += (((downlinkMessage.payload[5] & 0x03) << 2) | (downlinkMessage.payload[6] >> 6));
+        // Convert to seconds from the epoch - using Jan 1st
+        uint32_t time_bulletin = myARTIC.convertGPSTimeToEpoch(year, 1, 1, hour, minute, second);
+        time_bulletin += ((uint32_t)day_of_year - 1) * 24 * 60 * 60; // Now add the day of year (remembering that Jan 1st is day 1, not day 0)
+        bulletin.time_bulletin = time_bulletin; // Store it
+
+        // Extract the 19-bit ascending node longitude (deg)
+        // Longitude of the ascending node : the ascending node (terrestrial ascending node) is the
+        // point where the satellite ground track intersects the equatorial plane on the northbound crossing.
+        uint32_t anl = (((uint32_t)(downlinkMessage.payload[6] & 0x3F)) << 13);
+        anl |= ((uint32_t)downlinkMessage.payload[7]) << 5;
+        anl |= ((uint32_t)downlinkMessage.payload[8]) >> 3;
+        float anl_f = ((float)anl) / 1000; // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[2] = anl_f; // Store it
+
+        // Extract the 10-bit ascending node longitude drift (deg)
+        // Angular separation between two successive ascending nodes
+        uint32_t anld = (((uint32_t)(downlinkMessage.payload[8] & 0x07)) << 7);
+        anld |= ((uint32_t)downlinkMessage.payload[9]) >> 1;
+        float anld_f = (((float)anld) / 1000) - 26; // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[3] = anld_f; // Store it
+
+        // Extract the 14-bit orbital period (min)
+        // Nodal period : elapsed time between two successive ascending node passes
+        uint32_t op = (((uint32_t)(downlinkMessage.payload[9] & 0x01)) << 13);
+        op |= ((uint32_t)downlinkMessage.payload[10]) << 5;
+        op |= ((uint32_t)downlinkMessage.payload[11]) >> 3;
+        float op_f = (((float)op) / 1000) + 95; // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[4] = op_f; // Store it
+
+        // Extract the 19-bit semi-major axis (km)
+        // Semi-major axis : distance from the apogee (point farthest from the earth) to the center of
+        // the earth.
+        uint32_t sma = (((uint32_t)(downlinkMessage.payload[11] & 0x07)) << 16);
+        sma |= ((uint32_t)downlinkMessage.payload[12]) << 8;
+        sma |= ((uint32_t)downlinkMessage.payload[13]);
+        float sma_f = (((float)sma) / 1000) + 7000; // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[0] = sma_f; // Store it
+
+        // Extract the 8-bit semi-major axis drift (m/day)
+        // Semi-major axis decay : semi-major axis first derivative
+        uint32_t smad = ((uint32_t)(downlinkMessage.payload[14]));
+        float smad_f = 0 - (((float)smad) / 10); // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[5] = smad_f; // Store it
+        
+        // Extract the 16-bit orbit inclination (deg)
+        // Inclination : angle between the plane of the satellite orbit and the earth's equatorial plane
+        uint32_t oi = (((uint32_t)(downlinkMessage.payload[15])) << 8);
+        oi |= ((uint32_t)downlinkMessage.payload[16]);
+        float oi_f = (((float)oi) / 10000) + 97; // Defined in AS3-SP-516-2095-CNES
+        bulletin.params[1] = oi_f; // Store it
+
+        // Pretty-print the bulletin to Serial
+        myARTIC.printAOPbulletin(bulletin);
+      }
     }
     else
     {
@@ -232,7 +390,7 @@ void loop()
     }
 
     // Manually clear INT1 now that the message has been downloaded. This will clear the RX_VALID_MESSAGE flag too.
-    // *** INT1 will go high again after 100us if there is another message to be read ***
+    // *** INT1 will go high again after 100us if there is another message to be read (which could cause clearInterrupts to return false) ***
     Serial.println();
     Serial.println(F("Clearing INT1."));
     if (myARTIC.clearInterrupts(1) == false)

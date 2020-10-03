@@ -67,6 +67,9 @@
 
 #define ARTIC_R2_MAX_ADDRESS_LUT_LENGTH 50 // Maximum length of the address-filtering look-up-table
 
+#define ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_BYTES 660 // Length of the TX Payload in XMEM (220 * 24-bit words)
+#define ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS 220 // Length of the TX Payload in XMEM (220 * 24-bit words)
+
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 // Firmware status register (0x8018)
@@ -130,6 +133,16 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 	ARTIC_R2_WRITE_BURST = 0,
 	ARTIC_R2_READ_BURST,
 };
+
+// ARGOS 3 PTT-A3 Message Lengths
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_24 = 0x0; // 24 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 = 0x3; // 56 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_88 = 0x5; // 88 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_120 = 0x6; // 120 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_152 = 0x9; // 152 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_184 = 0xA; // 184 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_216 = 0xC; // 216 user bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_248 = 0xF; // 248 user bits
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
@@ -435,6 +448,7 @@ public:
 
 	// Helper functions to assemble the different message payloads
 	boolean setPayloadARGOS3ZE(uint32_t platformID); // Set the Tx payload for a ARGOS 3 ZE message
+	boolean setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 
@@ -443,7 +457,7 @@ public:
 	// It should probably be private, but it is public just in case the user wants
 	// to assemble their own payload.
 	uint32_t _txPayloadLengthBits = 0; // The encoded message length in bits
-	uint8_t _txPayloadBytes[660]; // Storage for up to 220 24-bit words
+	uint8_t _txPayloadBytes[ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_BYTES]; // Storage for up to 220 24-bit words
 
 	// This function copies _txPayloadLengthBits and _txPayloadBytes to the TX Payload in XMEM
 	// It gets called by (e.g.) setPayloadARGOS4VLD0 and setPayloadARGOS4VLD28
@@ -457,9 +471,13 @@ public:
 
 	// Arribada / CLS Satellite Pass Predictor
 	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time);
+
+	// Satellite pass prediciton helper tools
 	boolean convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
 	char* const convertEpochToDateTime(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string
+	char* const convertEpochToDateTimeAOP(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string in AOP format
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
+	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 
 private:
 	//Variables

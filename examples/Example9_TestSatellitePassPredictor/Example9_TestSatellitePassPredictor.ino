@@ -35,7 +35,7 @@
     Semi-major axis (km)
     Orbit inclination (deg)
     Ascending node longitude (deg)
-    Ascending node longitude drift (deg)
+    Ascending node longitudinal drift (deg)
     Orbital period (min)
     Semi-major axis drift (m/day)
 

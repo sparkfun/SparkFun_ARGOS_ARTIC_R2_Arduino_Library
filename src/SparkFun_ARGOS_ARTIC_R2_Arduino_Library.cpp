@@ -2627,7 +2627,7 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 {
-	_txPayloadLengthBits = 28; // I assume the payload length does not include the tail bits? TO DO: check this!
+	_txPayloadLengthBits = 28 + 8; // I assume the payload length does include the tail bits? TO DO: check this!
 	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
 	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
@@ -2638,11 +2638,69 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS3ZE: left-justified payload is 0x"));
-		_debugPort->print(_txPayloadBytes[0], HEX);
-		_debugPort->print(_txPayloadBytes[1], HEX);
-		_debugPort->print(_txPayloadBytes[2], HEX);
-		_debugPort->print(_txPayloadBytes[3], HEX);
-		_debugPort->println(_txPayloadBytes[4], HEX);
+		for (uint16_t i = 0; i < 6; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload for a ARGOS 3 PTT-A3 message
+// The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+// The number of user bits is 56.
+// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon)
+{
+	_txPayloadLengthBits = 4 + 28 + 56 + 8; // I assume the payload length does include the tail bits? TO DO: check this!
+	_txPayloadBytes[0] = (ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4) | (platformID >> 24); // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[1] = (platformID >> 16) & 0xFF;
+	_txPayloadBytes[2] = (platformID >> 8) & 0xFF;
+	_txPayloadBytes[3] = platformID & 0xFF;
+
+	boolean negative = false;
+	if (Lat < 0.0)
+	{
+		negative = true; // Is the Lat negative?
+		Lat = 0.0 - Lat; // Make it +ve
+	}
+	Lat *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
+	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
+	_txPayloadBytes[4] = (Lat_32 >> 13) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[5] = (Lat_32 >> 5) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[6] = (Lat_32 << 3) & 0xF8; // Load 5 bits of Lat into the payload
+
+	negative = false;
+	if (Lon < 0.0)
+	{
+		negative = true; // Is the Lon negative?
+		Lon = 0.0 - Lon; // Make it +ve
+	}
+	Lon *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
+	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	_txPayloadBytes[6] |= (Lon_32 >> 19) & 0x07; // Load 3 bits of Lon into the payload
+	_txPayloadBytes[7] = (Lon_32 >> 11) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[8] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[9] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
+	_txPayloadBytes[10] = 0x00; // Eight stuff bits
+	_txPayloadBytes[11] = 0x00; // Eight tail bits
+	// (No need to stuff buffer with zeros to a multiple of 24 bits)
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS3LatLon: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < 12; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
 	}
 
 	return setTxPayload();
@@ -2661,14 +2719,15 @@ boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 	_txPayloadBytes[4] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 	_txPayloadBytes[5] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 
-
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLD0: left-justified payload is 0x"));
-		_debugPort->print(_txPayloadBytes[0], HEX);
-		_debugPort->print(_txPayloadBytes[1], HEX);
-		_debugPort->print(_txPayloadBytes[2], HEX);
-		_debugPort->println(_txPayloadBytes[3], HEX);
+		for (uint16_t i = 0; i < 6; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
 	}
 
 	return setTxPayload();
@@ -2679,7 +2738,7 @@ boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 {
-	_txPayloadLengthBits = 56;
+	_txPayloadLengthBits = 28 + 28;
 	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
 	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
@@ -2693,13 +2752,12 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLD28: left-justified payload is 0x"));
-		_debugPort->print(_txPayloadBytes[0], HEX);
-		_debugPort->print(_txPayloadBytes[1], HEX);
-		_debugPort->print(_txPayloadBytes[2], HEX);
-		_debugPort->print(_txPayloadBytes[3], HEX);
-		_debugPort->print(_txPayloadBytes[4], HEX);
-		_debugPort->print(_txPayloadBytes[5], HEX);
-		_debugPort->println(_txPayloadBytes[6], HEX);
+		for (uint16_t i = 0; i < 9; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
 	}
 
 	return setTxPayload();
@@ -2709,6 +2767,8 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 // Returns true if the payload was copied successfully
 boolean ARTIC_R2::setTxPayload()
 {
+	// Write _txPayloadLengthBits to MEM_LOC_TX_PAYLOAD
+
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
@@ -2725,8 +2785,8 @@ boolean ARTIC_R2::setTxPayload()
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
-	int totalWords = ((int)_txPayloadLengthBits) / 24; // Convert bits to words
-	if ((((int)_txPayloadLengthBits) % 24) > 0) totalWords++; // Increment totalWords by 1 if there are any additional bits
+	// Write _txPayloadBytes, starting at MEM_LOC_TX_PAYLOAD + 1
+	// To keep life simple, we write (ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS - 1) words
 
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
@@ -2741,7 +2801,7 @@ boolean ARTIC_R2::setTxPayload()
 
 	uint8_t *bufferPtr = _txPayloadBytes;
 
-	writeMultipleWords(bufferPtr, 24, totalWords); // Write the words
+	writeMultipleWords(bufferPtr, 24, (ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS - 1)); // Write the words
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
@@ -2750,7 +2810,7 @@ boolean ARTIC_R2::setTxPayload()
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
 
@@ -2767,7 +2827,21 @@ boolean ARTIC_R2::setTxPayload()
 
 	uint32_t newPayloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
- 	return (newPayloadLength == _txPayloadLengthBits);
+	boolean result = (newPayloadLength == _txPayloadLengthBits);
+
+	if (result == false)
+	{
+		if (_printDebug == true)
+		{
+			_debugPort->print(F("setTxPayload: failed! _txPayloadLengthBits is "));
+			_debugPort->print(_txPayloadLengthBits);
+			_debugPort->print(F(". Value read back from MEM_LOC_TX_PAYLOAD is "));
+			_debugPort->print(newPayloadLength);
+			_debugPort->println(F("."));
+		}
+	}
+
+ 	return result;
 }
 
 // Write a single 24-bit word to the ARTIC R2
@@ -2818,10 +2892,17 @@ void ARTIC_R2::writeMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWo
 
 	for (int word = 0; word < numWords; word++)
 	{
-		for (int byteSize = 0; byteSize < (wordSizeInBits >> 4); byteSize++)
+		for (int byteSize = 0; byteSize < (wordSizeInBits >> 3); byteSize++) // Divide wordSizeInBits by 8
 		{
 			_spiPort->transfer(buffer[bufferPointer++]);
 		}
+
+		// Delay between words
+		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
+
+		// Extra delay between blocks
+		if (word % ARTIC_R2_BURST_BLOCK_SIZE == 0)
+			delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
 	}
 
 	digitalWrite(_cs, HIGH);
@@ -2858,6 +2939,7 @@ void ARTIC_R2::readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWor
 
 // Clear one or both interrupts
 // Returns true if the interrupts were cleared successfully
+// *** INT1 will go high again after 100us if there is another message to be read (which could cause clearInterrupts to return false) ***
 boolean ARTIC_R2::clearInterrupts(uint8_t interrupts)
 {
 	if ((interrupts < 1) || (interrupts > 3))
@@ -3436,11 +3518,11 @@ void ARTIC_R2::print_config(configurationParameters *p_pc)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("\n------------CONFIG STRUCT------------\n\n");
-		_debugPort->print("lat ");
-		_debugPort->print(p_pc[0].pf_lat);
-    _debugPort->print("\tlon ");
-		_debugPort->println(p_pc[0].pf_lon);
+    _debugPort->print("\n------------CONFIG STRUCT----------\n\n");
+		_debugPort->print("Latitude ");
+		_debugPort->print(p_pc[0].pf_lat, 4);
+    _debugPort->print("\tLongitude ");
+		_debugPort->println(p_pc[0].pf_lon, 4);
     _debugPort->print("START: time ");
 		_debugPort->print(p_pc[0].time_start);
     _debugPort->print(" END: time ");
@@ -3466,7 +3548,7 @@ void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("\n------------CONFIG SAT------------\n\n");
+    _debugPort->print("\n--------------CONFIG SAT-----------\n\n");
     for (int i = 0; i < number_sat; ++i)
     {
         _debugPort->print("NAME: ");
@@ -3480,7 +3562,7 @@ void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
 				_debugPort->print(p_po[i].inc, 4);
 				_debugPort->print(" Ascending node longitude ");
 				_debugPort->print(p_po[i].lon_asc, 3);
-				_debugPort->print(" Ascending node longitude drift ");
+				_debugPort->print(" Ascending node longitudinal drift ");
 				_debugPort->print(p_po[i].d_noeud, 3);
 				_debugPort->print(" Orbital period ");
 				_debugPort->print(p_po[i].ts, 4);
@@ -3518,10 +3600,10 @@ boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satel
 		satelliteParameters[i].params[0] = textToFloat(&AOP[offsetAOP + 32], 5, 3); // Semi-major axis (km)
 		satelliteParameters[i].params[1] = textToFloat(&AOP[offsetAOP + 42], 3, 4); // Orbit inclination (deg)
 		satelliteParameters[i].params[2] = textToFloat(&AOP[offsetAOP + 51], 4, 3); // Ascending node longitude (deg)
-		satelliteParameters[i].params[3] = textToFloat(&AOP[offsetAOP + 60], 4, 3); // Ascending node longitude drift (deg)
+		satelliteParameters[i].params[3] = textToFloat(&AOP[offsetAOP + 60], 4, 3); // Ascending node longitudinal drift (deg)
 		satelliteParameters[i].params[4] = textToFloat(&AOP[offsetAOP + 69], 4, 4); // Orbital period (min)
 		satelliteParameters[i].params[5] = textToFloat(&AOP[offsetAOP + 79], 3, 2); // Semi-major axis drift (m/day)
-		// Basic syntax checking - just to make sure nothing bag has happened and that the AOP appears to be correctly formatted
+		// Basic syntax checking - just to make sure nothing bad has happened and that the AOP appears to be correctly formatted
 		// Check that the first digit of the satellite identifier is M or 1 or S
 		if ((satelliteParameters[i].sat[0] != 'M') && (satelliteParameters[i].sat[0] != '1') && (satelliteParameters[i].sat[0] != 'S'))
 		{
@@ -3536,8 +3618,8 @@ boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satel
 				_debugPort->print("convertAOPtoParameters: AOP date (epoch) is invalid!");
 			result = false;
 		}
-		// Check that the Semi-major axis is >= 6000 and <= 8000
-		if ((satelliteParameters[i].params[0] < 6000) || (satelliteParameters[i].params[0] > 8000))
+		// Check that the Semi-major axis is >= 7000 and <= 7500
+		if ((satelliteParameters[i].params[0] < 7000) || (satelliteParameters[i].params[0] > 7500))
 		{
 			if (_printDebug == true)
 				_debugPort->print("convertAOPtoParameters: semi-major axis is invalid!");
@@ -3579,6 +3661,16 @@ char* const ARTIC_R2::convertEpochToDateTime(uint32_t epoch)
 	return dateTime;
 }
 
+// Convert epoch to AOP format date & time string
+char* const ARTIC_R2::convertEpochToDateTimeAOP(uint32_t epoch)
+{
+	static char dateTime[20]; // Storage for the date & time
+	time_t pt_of_day = epoch; // Convert to YY/MM/DD HH:MM:SS
+	tm* pt = gmtime(&pt_of_day);
+	sprintf(dateTime, "%4d %2d %2d %2d %2d %2d", pt->tm_year + 1900, pt->tm_mon + 1, pt->tm_mday, pt->tm_hour, pt->tm_min, pt->tm_sec);
+	return dateTime;
+}
+
 // Convert GPS date & time to epoch
 uint32_t ARTIC_R2::convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second)
 {
@@ -3595,4 +3687,74 @@ uint32_t ARTIC_R2::convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t d
   t_of_day = mktime(&t);
 
   return ((uint32_t)t_of_day);
+}
+
+// Pretty-print the AOP bulletin
+// Also prints using the same text format as the ARGOS Web AOP tool
+// so the data can be cut and pasted into other code and processed using convertAOPtoParameters
+// Returns true if the satellite ID is MA, MB, MC, 15, 18, 19 or SR (i.e. will be included in the ARGOS Web AOP and has a known two character ID)
+boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
+{
+	port.println(F("AOP Bulletin:"));
+	port.println(F("============="));
+	port.print(F("Satellite ID: "));
+	port.write(bulletin.sat[0]);
+	port.write(bulletin.sat[1]);
+	port.println();
+	port.print(F("Time of the bulletin: "));
+	port.println(convertEpochToDateTime(bulletin.time_bulletin));
+	port.print(F("Semi-major axis: "));
+	port.print(bulletin.params[0], 3);
+	port.println(F(" km"));
+	port.print(F("Orbit inclination: "));
+	port.print(bulletin.params[1], 4);
+	port.println(F(" deg"));
+	port.print(F("Ascending node longitude: "));
+	port.print(bulletin.params[2], 3);
+	port.println(F(" deg"));
+	port.print(F("Ascending node longitudinal drift: "));
+	port.print(bulletin.params[3], 3);
+	port.println(F(" deg"));
+	port.print(F("Orbital period: "));
+	port.print(bulletin.params[4], 4);
+	port.println(F(" min"));
+	port.print(F("Semi-major axis drift: "));
+	port.print(bulletin.params[5], 2);
+	port.println(F(" m/day"));
+	// Print again in AOP text format
+	port.print(F("\" "));
+	port.write(bulletin.sat[0]);
+	port.write(bulletin.sat[1]);
+	port.print(F(" # # # # "));
+	port.print(convertEpochToDateTimeAOP(bulletin.time_bulletin));
+	port.print(F("  "));
+	port.print(bulletin.params[0], 3);
+	port.print(F(" "));
+	if (bulletin.params[1] < 100.0) port.print(F(" "));
+	port.print(bulletin.params[1], 4);
+	port.print(F("  "));
+	if (bulletin.params[2] < 100.0) port.print(F(" "));
+	if (bulletin.params[2] < 10.0) port.print(F(" "));
+	port.print(bulletin.params[2], 3);
+	port.print(F("  "));
+	port.print(bulletin.params[3], 3);
+	port.print(F("  "));
+	if (bulletin.params[4] < 100.0) port.print(F(" "));
+	port.print(bulletin.params[4], 4);
+	port.print(F(" "));
+	if (bulletin.params[5] > -10.0) port.print(F(" "));
+	if (bulletin.params[5] >= 0.0) port.print(F(" "));
+	port.print(bulletin.params[5], 2);
+	port.println(F("\""));
+
+	if (((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'A')) ||
+		((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'B')) ||
+		((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'C')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '5')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '8')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '9')) ||
+		((bulletin.sat[0] == 'S') && (bulletin.sat[0] == 'R')))
+		return true;
+	else
+		return false;
 }

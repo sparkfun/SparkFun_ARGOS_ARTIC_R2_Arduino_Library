@@ -122,7 +122,7 @@ void setup()
   // Clear INT1
   if (myARTIC.clearInterrupts(1) == false)
   {
-    Serial.println("clearInterrupts failed. Freezing...");
+    Serial.println("clearInterrupts failed!");
     //while (1)
     //  ; // Do nothing more
   }  
@@ -241,7 +241,7 @@ void loop()
     }
 
     // Manually clear INT1 now that the message has been downloaded. This will clear the RX_VALID_MESSAGE flag too.
-    // *** INT1 will go high again after 100us if there is another message to be read ***
+    // *** INT1 will go high again after 100us if there is another message to be read (which could cause clearInterrupts to return false) ***
     Serial.println(F("Clearing INT1."));
     Serial.println();
     if (myARTIC.clearInterrupts(1) == false)

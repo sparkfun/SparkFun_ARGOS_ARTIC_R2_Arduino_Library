@@ -59,6 +59,7 @@ getAddressLUTlength	KEYWORD2
 readAddressLUTentry	KEYWORD2
 readDownlinkMessage	KEYWORD2
 setPayloadARGOS3ZE	KEYWORD2
+setPayloadARGOS3LatLon	KEYWORD2
 setPayloadARGOS4VLD0	KEYWORD2
 setPayloadARGOS4VLD28	KEYWORD2
 _txPayloadLengthBits	KEYWORD2
@@ -68,7 +69,9 @@ invertPWNENpin	KEYWORD2
 predictNextSatellitePass	KEYWORD2
 convertAOPtoParameters	KEYWORD2
 convertEpochToDateTime	KEYWORD2
+convertEpochToDateTimeAOP	KEYWORD2
 convertGPSTimeToEpoch	KEYWORD2
+printAOPbulletin	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

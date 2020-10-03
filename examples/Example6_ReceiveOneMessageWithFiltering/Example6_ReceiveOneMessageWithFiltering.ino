@@ -43,8 +43,7 @@
 
 // CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below to filter out all other messages.
 // E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
-// For testing, you can set the Platform ID to 0x000000BE or 0x000000C7 or 0x000000E1
-const uint32_t PLATFORM_ID = 0x000000BE; // Update this with your Platform ID
+const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
 
 #include <SPI.h>
 
@@ -123,7 +122,7 @@ void setup()
   // Clear INT1
   if (myARTIC.clearInterrupts(1) == false)
   {
-    Serial.println("clearInterrupts failed. Freezing...");
+    Serial.println("clearInterrupts failed!");
     //while (1)
     //  ; // Do nothing more
   }  

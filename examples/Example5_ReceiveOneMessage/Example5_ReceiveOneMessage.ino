@@ -115,7 +115,7 @@ void setup()
   // Clear INT1
   if (myARTIC.clearInterrupts(1) == false)
   {
-    Serial.println("clearInterrupts failed. Freezing...");
+    Serial.println("clearInterrupts failed!");
     //while (1)
     //  ; // Do nothing more
   }  
