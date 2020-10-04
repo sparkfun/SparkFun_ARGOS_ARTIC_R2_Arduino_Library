@@ -2869,7 +2869,7 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 	return setTxPayload();
 }
 
-// Set the Tx payload by copying txPayloadLengthBits and txPayloadBytes into X memory
+// Set the Tx payload by copying _txPayloadBytes into X memory
 // Returns true if the payload was copied successfully
 // NOTE: The ARTIC datasheet indicates that TX Payload is write-only. So, strictly,
 //   reading back the message length should not work. But it seems to work just fine...
