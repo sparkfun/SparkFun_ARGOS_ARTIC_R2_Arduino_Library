@@ -1212,6 +1212,27 @@ boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress 
 			}
 			break;
 		case INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE:
+/*
+	Note: here is what transmit one package looks like with ARTIC006 firmware:
+	==========================================================================
+
+	ARTIC R2 Firmware Status:
+	The firmware status BUSY flag is set. The firmware is busy changing state.
+
+	ARTIC R2 instruction progress:
+	MCU Instruction Progress: Reception For Fixed Time in progress.
+
+	ARTIC R2 Firmware Status:
+	The firmware status IDLE flag is set. The firmware is idle and ready to accept commands.
+	The firmware status TX_FINISHED flag is set. The transmission was completed.
+	The firmware status IDLE_STATE flag is set. The firmware has returned to the idle state.
+	The firmware status DSP2MCU_INT1 flag is set. Interrupt pin 1 is high.
+	INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!
+
+	ARTIC R2 instruction progress:
+	MCU Instruction Progress: Transmit One Package And Go Idle is complete. Message was transmitted.
+
+*/
 			if (status.STATUS_REGISTER_BITS.TX_INVALID_MESSAGE) // If the message was invalid
 			{
 				*progress = ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_INVALID_MESSAGE;
@@ -2627,18 +2648,25 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 {
-	_txPayloadLengthBits = 28 + 8; // I assume the payload length does include the tail bits? TO DO: check this!
-	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[3] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus 4 tail bits
-	_txPayloadBytes[4] = 0x00; // Remaining 4 tail bits plus four stuff bits
-	_txPayloadBytes[5] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	// Tx length in bits
+	// I assume the payload length does include the tail bits? TO DO: check this!
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_ZE_NUM_TAIL_BITS;
+
+	// The payload
+	// TO DO: Check this! It looks like Arribada Horizon includes 0b000 length bits?!
+	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus 4 tail bits
+	_txPayloadBytes[7] = 0x00; // Remaining 4 tail bits plus four stuff bits
+	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS3ZE: left-justified payload is 0x"));
-		for (uint16_t i = 0; i < 6; i++)
+		for (uint16_t i = 0; i < 9; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
@@ -2657,11 +2685,17 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon)
 {
-	_txPayloadLengthBits = 4 + 28 + 56 + 8; // I assume the payload length does include the tail bits? TO DO: check this!
-	_txPayloadBytes[0] = (ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4) | (platformID >> 24); // Message length and the first 4 bits of the 28-bit platform ID
-	_txPayloadBytes[1] = (platformID >> 16) & 0xFF;
-	_txPayloadBytes[2] = (platformID >> 8) & 0xFF;
-	_txPayloadBytes[3] = platformID & 0xFF;
+	// Tx length in bits
+	// I assume the payload length does include the tail bits? TO DO: check this!
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56 + ARTIC_R2_PTT_A3_NUM_TAIL_BITS_56;
+
+	// The payload itself
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = platformID & 0xFF;
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -2672,9 +2706,9 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 	Lat *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
 	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
-	_txPayloadBytes[4] = (Lat_32 >> 13) & 0xFF; // Load 8 bits of Lat into the payload
-	_txPayloadBytes[5] = (Lat_32 >> 5) & 0xFF; // Load 8 bits of Lat into the payload
-	_txPayloadBytes[6] = (Lat_32 << 3) & 0xF8; // Load 5 bits of Lat into the payload
+	_txPayloadBytes[7] = (Lat_32 >> 13) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[8] = (Lat_32 >> 5) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[9] = (Lat_32 << 3) & 0xF8; // Load 5 bits of Lat into the payload
 
 	negative = false;
 	if (Lon < 0.0)
@@ -2685,17 +2719,79 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 	Lon *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
 	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
-	_txPayloadBytes[6] |= (Lon_32 >> 19) & 0x07; // Load 3 bits of Lon into the payload
-	_txPayloadBytes[7] = (Lon_32 >> 11) & 0xFF; // Load 8 bits of Lon into the payload
-	_txPayloadBytes[8] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
-	_txPayloadBytes[9] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
-	_txPayloadBytes[10] = 0x00; // Eight stuff bits
-	_txPayloadBytes[11] = 0x00; // Eight tail bits
+	_txPayloadBytes[9] |= (Lon_32 >> 19) & 0x07; // Load 3 bits of Lon into the payload
+	_txPayloadBytes[10] = (Lon_32 >> 11) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[11] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[12] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
+	_txPayloadBytes[13] = 0x00; // Eight stuff bits
+	_txPayloadBytes[14] = 0x00; // Eight tail bits
 	// (No need to stuff buffer with zeros to a multiple of 24 bits)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS3LatLon: left-justified payload is 0x"));
-		for (uint16_t i = 0; i < 12; i++)
+		for (uint16_t i = 0; i < 15; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload for a ARGOS PTT-A2 message
+// The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+// The number of user bits is 56.
+// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon)
+{
+	// Tx length in bits
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56;
+
+	// The payload itself
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = platformID & 0xFF;
+
+	boolean negative = false;
+	if (Lat < 0.0)
+	{
+		negative = true; // Is the Lat negative?
+		Lat = 0.0 - Lat; // Make it +ve
+	}
+	Lat *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
+	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
+	_txPayloadBytes[7] = (Lat_32 >> 13) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[8] = (Lat_32 >> 5) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[9] = (Lat_32 << 3) & 0xF8; // Load 5 bits of Lat into the payload
+
+	negative = false;
+	if (Lon < 0.0)
+	{
+		negative = true; // Is the Lon negative?
+		Lon = 0.0 - Lon; // Make it +ve
+	}
+	Lon *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
+	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	_txPayloadBytes[9] |= (Lon_32 >> 19) & 0x07; // Load 3 bits of Lon into the payload
+	_txPayloadBytes[10] = (Lon_32 >> 11) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[11] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[12] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
+	_txPayloadBytes[13] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[14] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	// (No need to stuff buffer with zeros to a multiple of 24 bits)
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS2LatLon: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < 15; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
@@ -2711,18 +2807,23 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 {
-	_txPayloadLengthBits = 28;
-	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[3] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four stuff bits
-	_txPayloadBytes[4] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-	_txPayloadBytes[5] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	// Tx length in bits
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS;
+
+	// The payload itself
+	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four stuff bits
+	_txPayloadBytes[7] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLD0: left-justified payload is 0x"));
-		for (uint16_t i = 0; i < 6; i++)
+		for (uint16_t i = 0; i < 9; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
@@ -2738,21 +2839,26 @@ boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 {
-	_txPayloadLengthBits = 28 + 28;
-	_txPayloadBytes[0] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[1] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[2] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[3] = ((platformID << 4) | ((userData >> 24) & 0xF)) & 0xFF; // Left justify the 28 bits of user data
-	_txPayloadBytes[4] = (userData >> 16) & 0xFF;
-	_txPayloadBytes[5] = (userData >> 8) & 0xFF;
-	_txPayloadBytes[6] = userData & 0xFF;
-	_txPayloadBytes[7] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	// Tx length in bits
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + 28;
+
+	// The payload itself
+	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = ((platformID << 4) | ((userData >> 24) & 0xF)) & 0xFF; // Left justify the 28 bits of user data
+	_txPayloadBytes[7] = (userData >> 16) & 0xFF;
+	_txPayloadBytes[8] = (userData >> 8) & 0xFF;
+	_txPayloadBytes[9] = userData & 0xFF;
+	_txPayloadBytes[10] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[11] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLD28: left-justified payload is 0x"));
-		for (uint16_t i = 0; i < 9; i++)
+		for (uint16_t i = 0; i < 12; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
@@ -2765,10 +2871,12 @@ boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
 
 // Set the Tx payload by copying txPayloadLengthBits and txPayloadBytes into X memory
 // Returns true if the payload was copied successfully
+// NOTE: The ARTIC datasheet indicates that TX Payload is write-only. So, strictly,
+//   reading back the message length should not work. But it seems to work just fine...
 boolean ARTIC_R2::setTxPayload()
 {
-	// Write _txPayloadLengthBits to MEM_LOC_TX_PAYLOAD
-
+	// Write _txPayloadBytes, starting at MEM_LOC_TX_PAYLOAD
+	// To keep life simple, we write the entire ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS words
 	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
@@ -2781,29 +2889,15 @@ boolean ARTIC_R2::setTxPayload()
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
 
-	write24BitWord(_txPayloadLengthBits); // Write the encoded message length
-
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
-
-	// Write _txPayloadBytes, starting at MEM_LOC_TX_PAYLOAD + 1
-	// To keep life simple, we write (ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS - 1) words
-
-	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD + 1;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
-	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
-	configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
-
 	uint8_t *bufferPtr = _txPayloadBytes;
 
-	writeMultipleWords(bufferPtr, 24, (ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS - 1)); // Write the words
+	writeMultipleWords(bufferPtr, 24, ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS); // Write the words
 
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	// Calculate what the first memory location (message length in bits) should contain
+	bufferPtr = _txPayloadBytes;
+	uint32_t payloadLength = (((uint32_t)bufferPtr[0]) << 16) | (((uint32_t)bufferPtr[1]) << 8) | ((uint32_t)bufferPtr[2]);
 
 	// Read the encoded message length back again
 
@@ -2827,14 +2921,16 @@ boolean ARTIC_R2::setTxPayload()
 
 	uint32_t newPayloadLength = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
-	boolean result = (newPayloadLength == _txPayloadLengthBits);
+	// Check that the lengths match
+
+	boolean result = (newPayloadLength == payloadLength);
 
 	if (result == false)
 	{
 		if (_printDebug == true)
 		{
-			_debugPort->print(F("setTxPayload: failed! _txPayloadLengthBits is "));
-			_debugPort->print(_txPayloadLengthBits);
+			_debugPort->print(F("setTxPayload: failed! Expected payload length is "));
+			_debugPort->print(payloadLength);
 			_debugPort->print(F(". Value read back from MEM_LOC_TX_PAYLOAD is "));
 			_debugPort->print(newPayloadLength);
 			_debugPort->println(F("."));
@@ -2842,6 +2938,51 @@ boolean ARTIC_R2::setTxPayload()
 	}
 
  	return result;
+}
+
+// Read the Tx payload from XMEM back into _txPayloadBytes
+// This overwrites _txPayloadBytes
+void ARTIC_R2::readTxPayload()
+{
+	uint8_t *bufferPtr = _txPayloadBytes;
+
+	// Read the Tx payload
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_TX_PAYLOAD;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(bufferPtr, 24, ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_WORDS); // Read the entire Tx payload
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+}
+
+// Pretty-print the Tx payload as 24-bit values
+void ARTIC_R2::printTxPayload(Stream &port)
+{
+	uint8_t *bufferPtr = _txPayloadBytes;
+
+	port.println(F("TX Payload:"));
+
+	for (int i = 0; i < ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_BYTES; i++)
+	{
+		if (i % 3 == 0)
+			port.print(F("0x")); // Add the leading 0x
+		if (bufferPtr[i] < 0x10)
+			port.print(F("0")); // Add the leading 0
+		port.print(bufferPtr[i], HEX); // Print the byte
+		if (i % 3 == 2)
+			port.print(F(" ")); // Add the trailing space
+		if (i % 12 == 11)
+			port.println(); // Add a linefeed every 8 words
+	}
 }
 
 // Write a single 24-bit word to the ARTIC R2

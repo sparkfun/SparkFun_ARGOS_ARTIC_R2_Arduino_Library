@@ -14,7 +14,7 @@
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
     sets the satellite detection timeout to 60 seconds;
-    sets the TX mode to ARGOS PTT-A3;
+    sets the TX mode to ARGOS PTT-A2;
     sets the TX frequency;
     reads the GPS time, latitude and longitude;
     calculates the next satellite pass;
@@ -24,7 +24,7 @@
     repeats the message transmit numberTransmits times, repetitionPeriod seconds apart;
     repeats for the next satellite pass.
 
-  The messages are ARGOS 3 PPT-A3 and contain the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+  The messages are ARGOS PPT-A2 and contain the GPS latitude and longitude in a compact form which ARGOS Web will understand.
   The message contains 56 user bits.
   Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
   Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
@@ -225,8 +225,8 @@ void loop()
           ; // Do nothing more
       }
     
-      // Set the TX mode to ARGOS 3 PTT-A3
-      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_A3_TX_MODE);
+      // Set the TX mode to ARGOS PTT-A2
+      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_A2_TX_MODE);
       myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
       if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
       {
@@ -411,9 +411,9 @@ void loop()
       Serial.println(lon_tx, 4);
       Serial.println();
 
-      // Configure the Tx payload for ARGOS 3 PTT-A3 using our platform ID and the latest lat/lon
+      // Configure the Tx payload for ARGOS PTT-A2 using our platform ID and the latest lat/lon
       // TO DO: check if the payload is cleared from memory after transmission is complete. The code assumes it isn't.
-      if (myARTIC.setPayloadARGOS3LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
+      if (myARTIC.setPayloadARGOS2LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
       {
         Serial.println(F("setPayloadARGOS3LatLon failed!"));
         Serial.println();

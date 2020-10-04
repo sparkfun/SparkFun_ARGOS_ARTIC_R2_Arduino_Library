@@ -134,6 +134,26 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 	ARTIC_R2_READ_BURST,
 };
 
+// ARGOS Platform ID Length Bits
+const uint8_t ARTIC_R2_PLATFORM_ID_BITS = 28;
+
+// ARGOS PTT-A2 Message Length Bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS = 4;
+
+// ARGOS PTT-A2 Message Lengths
+// TO DO: Check these! They are currently just a copy of the A3 lengths...
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_24 = 0x0; // 24 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 = 0x3; // 56 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_88 = 0x5; // 88 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_120 = 0x6; // 120 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_152 = 0x9; // 152 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits
+
+// ARGOS 3 PTT-A3 Message Length Bits
+const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS = 4;
+
 // ARGOS 3 PTT-A3 Message Lengths
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_24 = 0x0; // 24 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 = 0x3; // 56 user bits
@@ -143,6 +163,31 @@ const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_152 = 0x9; // 152 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_184 = 0xA; // 184 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_216 = 0xC; // 216 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_248 = 0xF; // 248 user bits
+
+// ARGOS 3 PTT-A3 Number Of Tail Bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_24 = 7; // 24 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_56 = 8; // 56 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_88 = 9; // 88 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_120 = 7; // 120 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_152 = 8; // 152 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_184 = 9; // 184 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_216 = 7; // 216 user bits
+const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_248 = 8; // 248 user bits
+
+// ARGOS 3 PTT-ZE Number Of Tail Bits
+const uint8_t ARTIC_R2_PTT_ZE_NUM_TAIL_BITS = 8;
+
+// ARGOS 4 HD Number Of Tail Bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_32 = 8; // 32 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_512 = 8; // 512 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_1024 = 9; // 1024 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_1536 = 7; // 1536 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_2048 = 8; // 2048 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_2560 = 9; // 2560 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3072 = 7; // 3072 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3584 = 8; // 3584 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4096 = 9; // 4096 user bits
+const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
@@ -449,22 +494,30 @@ public:
 	// Helper functions to assemble the different message payloads
 	boolean setPayloadARGOS3ZE(uint32_t platformID); // Set the Tx payload for a ARGOS 3 ZE message
 	boolean setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
+	boolean setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 
 	// Storage for message transmission
-	// This storage is used by (e.g.) setPayloadARGOS4VLD0 and setPayloadARGOS4VLD28
+	// This storage is used by the setPayloadARGOS functions
 	// It should probably be private, but it is public just in case the user wants
 	// to assemble their own payload.
-	uint32_t _txPayloadLengthBits = 0; // The encoded message length in bits
 	uint8_t _txPayloadBytes[ARTIC_R2_TX_MAX_PAYLOAD_LENGTH_BYTES]; // Storage for up to 220 24-bit words
 
 	// This function copies _txPayloadLengthBits and _txPayloadBytes to the TX Payload in XMEM
-	// It gets called by (e.g.) setPayloadARGOS4VLD0 and setPayloadARGOS4VLD28
+	// It gets called by the setPayloadARGOS functions
 	// This function should probably be private, but it is public just in case the user wants
 	// to assemble their own payload.
 	// It returns true if the payload was copied successfully.
 	boolean setTxPayload();
+
+	// This function will read the payload from ARTIC XMEM into back _txPayloadBytes so the user can
+	// check that the payload was written correctly.
+	// NOTE: this of course overwrites the contents of _txPayloadBytes!
+	// NOTE: The ARTIC datasheet indicates that TX Payload is write-only. So, strictly, this function
+	//   should not work. But it seems to work just fine...
+	void readTxPayload();
+	void printTxPayload(Stream &port = Serial); // Pretty-print the Tx payload
 
 	// Call invertPWNENpin to invert the PWR_EN pin for the Arribada Horizon
 	void invertPWNENpin(boolean invert = true);
