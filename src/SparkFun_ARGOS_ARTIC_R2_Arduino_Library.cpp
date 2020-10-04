@@ -3909,13 +3909,13 @@ boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 	port.print(bulletin.params[5], 2);
 	port.println(F("\""));
 
-	if (((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'A')) ||
-		((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'B')) ||
-		((bulletin.sat[0] == 'M') && (bulletin.sat[0] == 'C')) ||
-		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '5')) ||
-		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '8')) ||
-		((bulletin.sat[0] == '1') && (bulletin.sat[0] == '9')) ||
-		((bulletin.sat[0] == 'S') && (bulletin.sat[0] == 'R')))
+	if (((bulletin.sat[0] == 'M') && (bulletin.sat[1] == 'A')) ||
+		((bulletin.sat[0] == 'M') && (bulletin.sat[1] == 'B')) ||
+		((bulletin.sat[0] == 'M') && (bulletin.sat[1] == 'C')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '5')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '8')) ||
+		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '9')) ||
+		((bulletin.sat[0] == 'S') && (bulletin.sat[1] == 'R')))
 		return true;
 	else
 		return false;
