@@ -56,16 +56,20 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("ARGOS ARTIC R2 Example"));
+  Serial.println();
 
   SPI.begin();
 
-  myARTIC.enableDebugging(); // Enable debug messages to Serial
+  Serial.println(F("ARTIC R2 is booting..."));
+  Serial.println();
 
-  //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages to Serial1 instead
+  //myARTIC.enableDebugging(); // Uncomment this line to enable debug messages on Serial
+
+  //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages on Serial1 instead
 
   // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
   // (Make sure you call .invertPWNENpin _before_ you call .begin !)
-  myARTIC.invertPWNENpin();
+  //myARTIC.invertPWNENpin();
 
   // Begin (initialize) the ARTIC
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)

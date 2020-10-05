@@ -59,16 +59,16 @@ void setup()
   Serial.println(F("ARGOS ARTIC R2 Example"));
   Serial.println();
 
-  Serial.println(F("The ARTIC is booting. This will take approx. 12 seconds."));
+  Serial.println(F("ARTIC R2 is booting..."));
   Serial.println();
 
   SPI.begin();
 
-  myARTIC.enableDebugging(); // Enable debug messages to Serial
+  //myARTIC.enableDebugging(); // Enable debug messages to Serial
 
   // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
   // (Make sure you call .invertPWNENpin _before_ you call .begin !)
-  myARTIC.invertPWNENpin();
+  //myARTIC.invertPWNENpin();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
@@ -81,44 +81,8 @@ void setup()
   Serial.println(F("ARTIC R2 boot was successful."));
   Serial.println();
 
-  unsigned long beginFinishedAt = millis(); // Keep a record of millis() when .begin finished
-
-  Serial.println(F("Waiting for INT1 to go high... (This could take up to 5 minutes with ARTIC006 firmware!)"));
-  Serial.println();
-
+  // Read and print the ARTIC R2 firmware status
   ARTIC_R2_Firmware_Status status;
-
-  do
-  {
-    myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-  
-    Serial.println(F("ARTIC R2 Firmware Status:"));
-    myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-    Serial.println();
-  
-    Serial.print(F("It has been "));
-    Serial.print((millis() - beginFinishedAt) / 1000);
-    Serial.println(F(" seconds since the ARTIC was booted."));
-    Serial.println();
-    
-    delay(5000);
-  }
-  while (status.STATUS_REGISTER_BITS.DSP2MCU_INT1 == false); // Check the interrupt 1 flag. This will go high when the RX offset calibration has completed.
-  
-  Serial.println(F("INT1 pin is high. ARTIC is ready!"));
-  Serial.println();
-
-  Serial.println(F("Clearing INT1."));
-  Serial.println();
-
-  // Clear INT1
-  if (myARTIC.clearInterrupts(1) == false)
-  {
-    Serial.println("clearInterrupts failed!");
-    //while (1)
-    //  ; // Do nothing more
-  }  
-  
   myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial

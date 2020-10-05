@@ -481,15 +481,11 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 		delay(100);
 	}
 
-	// With the ARTIC006 firmware, it seems to take up to 5 minutes for INT1 to go high.
-	// The datasheet suggests INT1 should go high after 250ms!
-	// So, I'm not quite sure what is happening... Maybe it is a feature of ARTIC006?
-
 	if ((millis() - bootStartTime) >= ARTIC_R2_BOOT_TIMEOUT)
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("begin: boot timed out! INT1 did not go high! Carrying on regardless..."));
-		//return (false); // Boot timed out!
+			_debugPort->println(F("begin: boot timed out! INT1 did not go high!"));
+		return (false); // Boot timed out!
 	}
 	else
 	{
@@ -505,8 +501,8 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 		if(clearInterrupts(3) == false) // Clear both interrupts
 		{
 			if (_printDebug == true)
-				_debugPort->println(F("begin: failed to clear interrupts! Carrying on regardless..."));
-			//return (false);
+				_debugPort->println(F("begin: failed to clear interrupts!"));
+			return (false);
 		}
 
 		// Print the firmware status - after clearing the interrupt pins
@@ -553,8 +549,8 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	if ((millis() - bootStartTime) >= ARTIC_R2_FLASH_BOOT_TIMEOUT)
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("begin: boot timed out!  Carrying on regardless..."));
-		//return (false); // Boot timed out!
+			_debugPort->println(F("begin: boot timed out! INT1 did not go high!"));
+		return (false); // Boot timed out!
 	}
 
 	// Print the firmware status - before we clear the interrupt pins
@@ -569,8 +565,8 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	if(clearInterrupts(3) == false) // Clear both interrupts
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("begin: failed to clear interrupts! Carrying on regardless..."));
-		//return (false);
+			_debugPort->println(F("begin: failed to clear interrupts!"));
+		return (false);
 	}
 
 	// Print the firmware status - after clearing the interrupt pins
@@ -1340,7 +1336,6 @@ boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress 
 	The firmware status SATELLITE_TIMEOUT flag is set. No satellite was detected within the specified time.
 	The firmware status DSP2MCU_INT1 flag is set. Interrupt pin 1 is high.
 	The firmware status DSP2MCU_INT2 flag is set. Interrupt pin 2 is high.
-	INT1 pin is high. Satellite detected!
 	INT2 pin is high. Satellite detection has timed out!
 
 	ARTIC R2 instruction progress:
@@ -3205,8 +3200,8 @@ uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min
 
   for (int i = 0; i < number_sat; ++i)
   {
-      tab_PO[i].sat[0], bulletin[i].sat[0];
-			tab_PO[i].sat[1], bulletin[i].sat[1];
+      tab_PO[i].sat[0] = bulletin[i].sat[0];
+			tab_PO[i].sat[1] = bulletin[i].sat[1];
       tab_PO[i].time_bul = bulletin[i].time_bulletin;
       tab_PO[i].dga = bulletin[i].params[0];
       tab_PO[i].inc = bulletin[i].params[1];

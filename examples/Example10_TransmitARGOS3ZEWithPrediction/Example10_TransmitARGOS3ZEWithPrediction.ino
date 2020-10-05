@@ -107,7 +107,6 @@ uint8_t PWR_EN_Pin = 9;
 // Loop Steps - these are used by the switch/case in the main loop
 // This structure makes it easy to jump between any of the steps
 enum {
-  start_ARTIC,         // Wait for the ARTIC to finish booting
   configure_ARTIC,     // Configure the ARTIC (set the satellite detection timeout and TX mode)
   wait_for_GPS,        // Wait for the GPS time and position to be valid
   calculate_next_pass, // Read the GPS time, lat and lon. Calculate the next satellite pass
@@ -115,7 +114,7 @@ enum {
   ARTIC_TX,            // Start the ARTIC TX
   wait_for_ARTIC_TX,   // Wait for the ARTIC to transmit
 } loop_steps;
-int loop_step = start_ARTIC; // Make sure loop_step is set to start_ARTIC
+int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
 
 uint32_t nextTransmitTime; // Time of the next satellite transmission
 uint8_t remainingTransmits; // Remaining number of satellite transmits
@@ -125,6 +124,7 @@ void setup()
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("ARGOS ARTIC R2 Example"));
+  Serial.println();
 
   Wire.begin();
 
@@ -151,7 +151,7 @@ void setup()
 
   // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
   // (Make sure you call .invertPWNENpin _before_ you call .begin !)
-  myARTIC.invertPWNENpin();
+  //myARTIC.invertPWNENpin();
 
   Serial.println(F("Starting the ARTIC R2..."));
   Serial.println();
@@ -170,45 +170,6 @@ void loop()
   // loop is one large switch/case that controls the sequencing of the code
   switch (loop_step) {
 
-    // ************************************************************************************************
-    // Wait for the ARTIC to finish booting
-    case start_ARTIC:
-    {
-      ARTIC_R2_Firmware_Status status;
-      myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
-    
-      if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1 == false) // Check the interrupt 1 flag. This will go high when the RX offset calibration has completed.
-      {
-        Serial.println(F("Waiting for INT1 to go high... (This could take up to 5 minutes with ARTIC006 firmware!)"));
-        Serial.println();
-    
-        Serial.println(F("ARTIC R2 Firmware Status:"));
-        myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-        Serial.println();
-      
-        delay(5000);
-      }
-      else
-      {
-        Serial.println(F("INT1 pin is high. ARTIC is ready!"));
-        Serial.println();
-      
-        Serial.println(F("Clearing INT1."));
-        Serial.println();
-      
-        // Clear INT1
-        if (myARTIC.clearInterrupts(1) == false)
-        {
-          Serial.println("clearInterrupts failed!");
-          //while (1)
-          //  ; // Do nothing more
-        }  
-  
-        loop_step = configure_ARTIC; // Move on
-      }
-    }
-    break;
-  
     // ************************************************************************************************
     // Configure the ARTIC
     case configure_ARTIC:
