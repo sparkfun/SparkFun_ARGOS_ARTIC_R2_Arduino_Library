@@ -1216,7 +1216,13 @@ boolean ARTIC_R2::checkMCUinstructionProgress(ARTIC_R2_MCU_Instruction_Progress 
 	The firmware status BUSY flag is set. The firmware is busy changing state.
 
 	ARTIC R2 instruction progress:
-	MCU Instruction Progress: Reception For Fixed Time in progress.
+	MCU Instruction Progress: Transmit One Package And Go Idle in progress.
+
+	ARTIC R2 Firmware Status:
+	The firmware status TX_IN_PROGRESS flag is set. The firmware is transmitting.
+
+	ARTIC R2 instruction progress:
+	MCU Instruction Progress: Transmit One Package And Go Idle in progress.
 
 	ARTIC R2 Firmware Status:
 	The firmware status IDLE flag is set. The firmware is idle and ready to accept commands.
@@ -1458,10 +1464,10 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
   	port.println(F("MCU Instruction Progress: Reception For Fixed Time is complete. The RX buffer has overflowed!"));
 		break;
 	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE:
-  	port.println(F("MCU Instruction Progress: Reception For Fixed Time in progress."));
+  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle in progress."));
 		break;
 	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_IDLE_STATE:
-  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle in progress."));
+  	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle is complete. MCU has returned to the idle state."));
 		break;
 	case ARTIC_R2_MCU_PROGRESS_TRANSMIT_ONE_GO_IDLE_TX_FINISHED:
   	port.println(F("MCU Instruction Progress: Transmit One Package And Go Idle is complete. Message was transmitted."));
@@ -1500,7 +1506,7 @@ void ARTIC_R2::printInstructionProgress(ARTIC_R2_MCU_Instruction_Progress progre
   	port.println(F("MCU Instruction Progress: Go To Idle in progress."));
 		break;
 	case ARTIC_R2_MCU_PROGRESS_GO_TO_IDLE_IDLE_STATE:
-  	port.println(F("MCU Instruction Progress: Go To Idle is complete."));
+  	port.println(F("MCU Instruction Progress: Go To Idle is complete. MCU has returned to the idle state."));
 		break;
 	case ARTIC_R2_MCU_PROGRESS_SATELLITE_DETECTION:
   	port.println(F("MCU Instruction Progress: Satellite Detection in progress."));

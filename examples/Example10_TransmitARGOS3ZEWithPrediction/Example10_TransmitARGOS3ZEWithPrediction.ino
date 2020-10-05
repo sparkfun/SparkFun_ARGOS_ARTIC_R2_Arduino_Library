@@ -228,6 +228,8 @@ void loop()
     // Wait for the GPS time to be valid and for the position fix to be 3D
     case wait_for_GPS:
     {
+      delay(250); // Let's not pound the u-blox too hard...
+      
       // Read the GPS. Check that the time is valid. It should be by now as we have waited for the ARTIC to start!
       boolean timeValid = myGPS.getTimeValid();
       timeValid = myGPS.getTimeValid(); // Call getTimeValid twice to ensure we have fresh data
@@ -318,11 +320,34 @@ void loop()
         //nextTransmitTime = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
       }
 
-      Serial.print(F("The first transmit attempt will take place at: "));
-      Serial.println(nextTransmitTime);
-      Serial.println();
+      // If multiple transmits should have already started (i.e. nextTransmitTime < epochNow)
+      // then add repetitionPeriod to nextTransmitTime and decrement remainingTransmits
+      // to avoid violating the repetitionPeriod on the next transmit
+      if ((remainingTransmits > 1) && (nextTransmitTime < epochNow))
+      {
+        while ((remainingTransmits > 1) && (nextTransmitTime < epochNow))
+        {
+          nextTransmitTime += repetitionPeriod;
+          remainingTransmits--;
+        }
+      }
 
-      loop_step = wait_for_next_pass; // Move on
+      if (remainingTransmits >= 1)
+      {
+        Serial.print(F("Transmit attempt 1 of "));
+        Serial.print(remainingTransmits);
+        Serial.print(F(" will take place at: "));
+        Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTime));
+        Serial.println(F(" UTC"));
+  
+        loop_step = wait_for_next_pass; // Move on
+      }
+      else
+      {
+        Serial.println(F("The transmission window was missed. Recalculating..."));
+        Serial.println();
+        // Leave loop_step unchanged so the next pass is recalculated      
+      }
     }
     break;
       
@@ -330,6 +355,8 @@ void loop()
     // Wait until the next satellite pass
     case wait_for_next_pass:
     {
+      delay(250); // Let's not pound the u-blox too hard...
+      
       // Read the GPS time
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
