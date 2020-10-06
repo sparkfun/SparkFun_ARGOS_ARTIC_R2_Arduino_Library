@@ -5,7 +5,7 @@
 #ifndef ARTIC_R2_MEM_LOC_H
 #define ARTIC_R2_MEM_LOC_H
 
-#define ARTIC_R2_FIRMWARE_VERSION 4 // Make it clear that we are using ARTIC004
+const uint8_t ARTIC_R2_FIRMWARE_VERSION = 4; // Make it clear that we are using ARTIC004
 
 // P Memory Locations
 const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'

@@ -874,18 +874,71 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendConfigurationCommand(uint8_t command)
 
 	if (status.STATUS_REGISTER_BITS.MCU_COMMAND_ACCEPTED)
 	{
+		if (_printDebug == true)
+		{
+			if (!status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // If the INT1 flag is _not_set
+			{
+				_debugPort->println(F("sendConfigurationCommand: command was accepted but INT1 did not go high!"));
+			}
+		}
+
+		boolean clrIntResult = clearInterrupts(1); // Clear INT1
+
+		if (_printDebug == true)
+		{
+			if (!clrIntResult) // If clearing the INT1 flag failed
+			{
+				_debugPort->println(F("sendConfigurationCommand: failed to clear INT1!"));
+			}
+		}
+
 		return ARTIC_R2_MCU_COMMAND_ACCEPTED;
 	}
 	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_REJECTED)
 	{
+		if (_printDebug == true)
+		{
+			if (!status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // If the INT2 flag is _not_set
+			{
+				_debugPort->println(F("sendConfigurationCommand: command was REJECTED but INT2 did not go high!"));
+			}
+		}
+
+		boolean clrIntResult = clearInterrupts(2); // Clear INT2
+
+		if (_printDebug == true)
+		{
+			if (!clrIntResult) // If clearing the INT2 flag failed
+			{
+				_debugPort->println(F("sendConfigurationCommand: failed to clear INT2!"));
+			}
+		}
+
 		return ARTIC_R2_MCU_COMMAND_REJECTED;
 	}
 	else if (status.STATUS_REGISTER_BITS.MCU_COMMAND_OVERFLOW)
 	{
+		if (_printDebug == true)
+		{
+			_debugPort->println(F("sendConfigurationCommand: COMMAND OVERFLOW!"));
+		}
+
+		boolean clrIntResult = clearInterrupts(3); // Clear both interrupts - because we probably should?
+
+		if (_printDebug == true)
+		{
+			if (!clrIntResult) // If clearing the INT flags failed
+			{
+				_debugPort->println(F("sendConfigurationCommand: failed to clear interrupts!"));
+			}
+		}
+
 		return ARTIC_R2_MCU_COMMAND_OVERFLOW;
 	}
 	else
 	{
+		clearInterrupts(3); // Clear both interrupts - because we probably should?
+		
 		return ARTIC_R2_MCU_COMMAND_UNCERTAIN; // Hopefully this is impossible?
 	}
 }
@@ -3932,4 +3985,69 @@ boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 		return true;
 	else
 		return false;
+}
+
+// Write word to the external flash memory.
+// *** This is pure guesswork! ***
+// Returns true if write was attempted.
+// Returns false if firmware version is < ARTIC006
+boolean ARTIC_R2::writeToFlashMemory(uint32_t word)
+{
+	// Check that we are using firmware ARTIC006 or later
+	if (ARTIC_R2_FIRMWARE_VERSION < 6)
+	{
+		if (_printDebug == true)
+			_debugPort->println("writeToFlashMemory: not supported by this firmware!");
+
+		return false; // Abort! ARTIC004 does not support this.
+	}
+
+	// Prepare a burstmode write to MEM_LOC_FLASH_PROG_BUFFER in XMEM
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_FLASH_PROG_BUFFER;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	write24BitWord(word); // Write the word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	// Read the data back again and debug-print it
+
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_FLASH_PROG_BUFFER;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	uint8_t buffer[3]; // Buffer for the SPI data
+	uint8_t *ptr = buffer; // Pointer to the buffer
+
+	readMultipleWords(ptr, 24, 1); // Read 1 24-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	if (_printDebug == true)
+	{
+		_debugPort->print("writeToFlashMemory: MEM_LOC_FLASH_PROG_BUFFER contains 0x");
+		if (buffer[0] < 0x10) _debugPort->print("0");
+		_debugPort->print(buffer[0], HEX);
+		if (buffer[1] < 0x10) _debugPort->print("0");
+		_debugPort->print(buffer[1], HEX);
+		if (buffer[2] < 0x10) _debugPort->print("0");
+		_debugPort->println(buffer[2], HEX);
+	}
+	return true;
 }

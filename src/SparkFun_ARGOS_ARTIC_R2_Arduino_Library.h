@@ -534,6 +534,9 @@ public:
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 
+	// Write to flash memory. *** This is pure guesswork! ***
+	boolean writeToFlashMemory(uint32_t word); // Write word to the external flash memory. Returns true if write was attempted.
+
 private:
 	//Variables
 	Stream *_debugPort;			 //The stream to send debug messages to if enabled. Usually Serial.
