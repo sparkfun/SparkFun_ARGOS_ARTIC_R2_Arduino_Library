@@ -377,8 +377,14 @@ void loop()
           Serial.println();
       }
 
+      // Check for a GPS time glitch
+      // Stay in wait_for_next_pass if secsRemaining < -60
+      if (secsRemaining < -60)
+      {
+        Serial.println(F("GPS time glitch? Ignoring..."));
+      }
       // Check if we should start the TX
-      if (secsRemaining <= 0)
+      else if (secsRemaining <= 0)
       {
         Serial.println();
         Serial.println(F("*** STARTING TX ***"));
