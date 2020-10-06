@@ -79,15 +79,27 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	{
 		pinMode(_gain8, OUTPUT);
 		pinMode(_gain16, OUTPUT);
-		setTXgain(24); // Default to maximum gain
+		setTXgain(0); // Set the TX gain to minimum while we turn the power on, to reduce the current surge
+		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
 	enableARTICpower(); // Enable power for the ARTIC R2
-	delay(100);
-	digitalWrite(_rst, HIGH); //Bring the ARTIC out of reset
+	delay(ARTIC_R2_POWER_ON_DELAY_MS);
+
+	// Now ramp up the TX gain to 24, if the _gain8 and _gain16 pins are defined, to reduce the current surge
+	if ((_gain8 >= 0) && (_gain16 >= 0))
+	{
+		setTXgain(16);
+		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+		setTXgain(24);
+		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+	}
+
+	//Bring the ARTIC out of reset
+	digitalWrite(_rst, HIGH);
 
 	if (_printDebug == true)
-		_debugPort->println(F("begin: IO pins are configured..."));
+		_debugPort->println(F("begin: IO pins are configured. ARTIC has been reset."));
 
 #ifdef ARTIC_R2_UPLOAD_FIRMWARE
 
@@ -474,14 +486,14 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 
 	unsigned long bootStartTime = millis();
 
-	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT) && (digitalRead(_int1) == LOW))
+	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT_MS) && (digitalRead(_int1) == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: waiting for the ARTIC to boot (checking if INT1 has gone high)..."));
 		delay(100);
 	}
 
-	if ((millis() - bootStartTime) >= ARTIC_R2_BOOT_TIMEOUT)
+	if ((millis() - bootStartTime) >= ARTIC_R2_BOOT_TIMEOUT_MS)
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: boot timed out! INT1 did not go high!"));
@@ -539,14 +551,14 @@ boolean ARTIC_R2::begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BO
 	delay(ARTIC_R2_BOOT_DELAY_MS);
 	unsigned long bootStartTime = millis();
 
-	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT) && (digitalRead(_int1) == LOW))
+	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT_MS) && (digitalRead(_int1) == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: ARTIC is booting from flash (waiting for INT1 to go high)..."));
 		delay(100);
 	}
 
-	if ((millis() - bootStartTime) >= ARTIC_R2_FLASH_BOOT_TIMEOUT)
+	if ((millis() - bootStartTime) >= ARTIC_R2_FLASH_BOOT_TIMEOUT_MS)
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: boot timed out! INT1 did not go high!"));

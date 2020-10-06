@@ -52,9 +52,11 @@
 // SCLK is normally low (CPOL=0). Data is valid/latched on the falling SCLK edge (CPHA=1). So we need to use SPI MODE1.
 #define ARTIC_R2_SPI_MODE SPI_MODE1
 
-#define ARTIC_R2_FLASH_BOOT_TIMEOUT 2500 // ARTIC should boot in 2.25 secs. Timeout after 2500ms.
-#define ARTIC_R2_BOOT_TIMEOUT 500 // Datasheet says ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
-//#define ARTIC_R2_BOOT_TIMEOUT 10000 // Arribada Horizon waits for up to 10 seconds
+#define ARTIC_R2_TX_POWER_ON_DELAY_MS 50 // Wait for this many milliseconds after setting the TX gain pins before enabling the power
+#define ARTIC_R2_POWER_ON_DELAY_MS 250 // Wait for this many milliseconds after enabling the power before attempting to communicate with the ARTIC
+#define ARTIC_R2_FLASH_BOOT_TIMEOUT_MS 2500 // ARTIC should boot in 2.25 secs. Timeout after 2500ms.
+#define ARTIC_R2_BOOT_TIMEOUT_MS 500 // Datasheet says ARTIC should boot in 0.25 secs after firmware upload. Timeout after 500ms.
+//#define ARTIC_R2_BOOT_TIMEOUT_MS 10000 // Arribada Horizon waits for up to 10 seconds
 #define ARTIC_R2_BOOT_DELAY_MS 1000 // Delay used when uploading firmware
 #define ARTIC_R2_BOOT_MAX_RETRIES 5 // Attempt to read the status register this many times when uploading firmware
 #define ARTIC_R2_BURST_INTER_WORD_DELAY_US 50 // Delay for this many microseconds between words during a write burst
