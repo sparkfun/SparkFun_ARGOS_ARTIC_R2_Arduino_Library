@@ -98,14 +98,14 @@ ARTIC_R2 myARTIC;
 SFE_UBLOX_GPS myGPS;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
-uint8_t CS_Pin = 24;
-uint8_t GAIN8_Pin = 3;
-uint8_t GAIN16_Pin = 4;
-uint8_t BOOT_Pin = 5;
-uint8_t INT1_Pin = 6;
-uint8_t INT2_Pin = 7;
-uint8_t RESET_Pin = 8;
-uint8_t PWR_EN_Pin = 9;
+int CS_Pin = 24;
+int GAIN8_Pin = 3;
+int GAIN16_Pin = 4;
+int BOOT_Pin = 5;
+int INT1_Pin = 6;
+int INT2_Pin = 7;
+int RESET_Pin = 8;
+int PWR_EN_Pin = 9;
 
 // Loop Steps - these are used by the switch/case in the main loop
 // This structure makes it easy to jump between any of the steps

@@ -429,7 +429,7 @@ class ARTIC_R2
 {
 public:
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
-	boolean begin(uint8_t user_CSPin, uint8_t user_RSTPin, uint8_t user_BOOTPin, uint8_t user_PWRENPin, uint8_t user_INT1Pin, uint8_t user_INT2Pin, uint8_t user_GAIN8Pin = -1, uint8_t user_GAIN16Pin = -1, uint32_t spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
+	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_PWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, int user_GAIN16Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -534,9 +534,6 @@ public:
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 
-	// Write to flash memory. *** This is pure guesswork! ***
-	boolean writeToFlashMemory(uint32_t word); // Write word to the external flash memory. Returns true if write was attempted.
-
 private:
 	//Variables
 	Stream *_debugPort;			 //The stream to send debug messages to if enabled. Usually Serial.
@@ -544,14 +541,14 @@ private:
 
 	SPIClass *_spiPort; // The generic connection to user's chosen SPI hardware
 	unsigned long _spiPortSpeed; // Optional user defined port speed
-	uint8_t _cs; // ARTIC R2 SPI Chip Select
-	uint8_t _rst; // ARTIC R2 Reset pin
-	uint8_t _boot; // ARTIC R2 Boot pin
-	uint8_t _pwr_en; // Pull this pin low to enable power for the ARTIC R2
-	uint8_t _int1; // ARTIC R2 Interrupt 1 pin
-	uint8_t _int2; // ARTIC R2 Interrupt 2 pin
-	uint8_t _gain8 = -1; // Pull this pin high to _disable_ the x8 RF gain
-	uint8_t _gain16 = -1; // Pull this pin high to _disable_ the x16 RF gain
+	int _cs; // ARTIC R2 SPI Chip Select
+	int _rst; // ARTIC R2 Reset pin
+	int _boot; // ARTIC R2 Boot pin
+	int _pwr_en; // Pull this pin low to enable power for the ARTIC R2
+	int _int1; // ARTIC R2 Interrupt 1 pin
+	int _int2; // ARTIC R2 Interrupt 2 pin
+	int _gain8 = -1; // Pull this pin high to _disable_ the x8 RF gain
+	int _gain16 = -1; // Pull this pin high to _disable_ the x16 RF gain
 
 	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
 	// This allows some time for the internal memory access block to retrieve the first data sample.
