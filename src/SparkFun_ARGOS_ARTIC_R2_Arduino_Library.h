@@ -143,15 +143,14 @@ const uint8_t ARTIC_R2_PLATFORM_ID_BITS = 28;
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS = 4;
 
 // ARGOS PTT-A2 Message Lengths
-// TO DO: Check these! They are currently just a copy of the A3 lengths...
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_24 = 0x0; // 24 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 = 0x3; // 56 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_88 = 0x5; // 88 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_120 = 0x6; // 120 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_152 = 0x9; // 152 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits
-const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_24 = 0x0; // 24 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 = 0x3; // 56 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_88 = 0x5; // 88 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_120 = 0x6; // 120 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_152 = 0x9; // 152 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits (with a 28-bit Platform ID)
 
 // ARGOS 3 PTT-A3 Message Length Bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS = 4;
@@ -190,6 +189,16 @@ const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3072 = 7; // 3072 user bits
 const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3584 = 8; // 3584 user bits
 const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4096 = 9; // 4096 user bits
 const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
+
+// ARGOS 4 VLD Message Length Bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS = 2;
+
+// ARGOS 4 VLD Message Lengths (2-bit)
+const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT = 0x0; // 0 user bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG = 0x3; // 56 user bits
+
+// ARGOS 4 VLD Number Of Tail Bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS = 6;
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
@@ -498,7 +507,6 @@ public:
 	boolean setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
-	boolean setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData); // Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
 
 	// Storage for message transmission
 	// This storage is used by the setPayloadARGOS functions

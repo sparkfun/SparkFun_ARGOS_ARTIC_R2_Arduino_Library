@@ -2718,13 +2718,14 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 {
 	// Tx length in bits
-	// I assume the payload length does include the tail bits? TO DO: check this!
+	// For PTT-ZE messages, the total message length is the sum of:
+	//   28 bits for the Platform ID
+	//   8 tail bits
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
 	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_ZE_NUM_TAIL_BITS;
 
 	// The payload
-	// TO DO: Check this! It looks like Arribada Horizon includes 0b000 length bits?!
 	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
 	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
@@ -2748,14 +2749,20 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 
 // Set the Tx payload for a ARGOS 3 PTT-A3 message
 // The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+// Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
+// The Latitude and Longitude will then be extracted, converted and displayed automatically when you view your data.
 // The number of user bits is 56.
-// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
-// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon)
 {
 	// Tx length in bits
-	// I assume the payload length does include the tail bits? TO DO: check this!
+	// For PTT-A3 messages, the total message length is the sum of:
+	//   4 message length bits
+	//   28 bits for the Platform ID
+	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248
+	//   7, 8 or 9 tail bits: see ARTIC_R2_PTT_A3_NUM_TAIL_BITS_
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56 + ARTIC_R2_PTT_A3_NUM_TAIL_BITS_56;
@@ -2811,13 +2818,20 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 
 // Set the Tx payload for a ARGOS PTT-A2 message
 // The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+// Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
+// The Latitude and Longitude will then be extracted, converted and displayed automatically when you view your data.
 // The number of user bits is 56.
-// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
-// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon)
 {
 	// Tx length in bits
+	// For PTT-A2 messages, the total message length is the sum of:
+	//   4 message length bits
+	//   28 bits for the Platform ID
+	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248
+	// (PTT-A2 messages can also use a 20-bit Platform ID)
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56;
@@ -2854,9 +2868,8 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	_txPayloadBytes[10] = (Lon_32 >> 11) & 0xFF; // Load 8 bits of Lon into the payload
 	_txPayloadBytes[11] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
 	_txPayloadBytes[12] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
-	_txPayloadBytes[13] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[13] = 0x00; // Eight stuff bits
 	_txPayloadBytes[14] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-	// (No need to stuff buffer with zeros to a multiple of 24 bits)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS2LatLon: left-justified payload is 0x"));
@@ -2872,62 +2885,38 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 }
 
 // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
-// The payload contains _only_ the 28-bit platform ID (left justified)
+// The payload contains _only_ the 28-bit platform ID (left justified) plus 6 tail bits
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
 {
 	// Tx length in bits
+	// TO DO: Work out if the payload length needs to include the two message length bits
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS;
+	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS;
+	// Or it could be:
+	//_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS;
 
 	// The payload itself
+	// TO DO: Work out if we need to include the 2-bit message length here?
 	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
 	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four stuff bits
-	_txPayloadBytes[7] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
 	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	// Or it could be:
+	//_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
+	//_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
+	//_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
+	//_txPayloadBytes[6] = (platformID << 2) & 0xF0; // Last 6 bits of the platform ID plus two tail bits
+	//_txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
+	//_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
 
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLD0: left-justified payload is 0x"));
 		for (uint16_t i = 0; i < 9; i++)
-		{
-			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
-			_debugPort->print(_txPayloadBytes[i], HEX);
-		}
-		_debugPort->println();
-	}
-
-	return setTxPayload();
-}
-
-// Set the Tx payload for a ARGOS 4 VLD message with 28 bits of user data
-// The payload contains the 28-bit platform ID and the 28 bits of user data (left justified)
-// Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS4VLD28(uint32_t platformID, uint32_t userData)
-{
-	// Tx length in bits
-	_txPayloadBytes[0] = 0x00;
-	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + 28;
-
-	// The payload itself
-	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = ((platformID << 4) | ((userData >> 24) & 0xF)) & 0xFF; // Left justify the 28 bits of user data
-	_txPayloadBytes[7] = (userData >> 16) & 0xFF;
-	_txPayloadBytes[8] = (userData >> 8) & 0xFF;
-	_txPayloadBytes[9] = userData & 0xFF;
-	_txPayloadBytes[10] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-	_txPayloadBytes[11] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-
-	if (_printDebug == true)
-	{
-		_debugPort->print(F("setPayloadARGOS4VLD28: left-justified payload is 0x"));
-		for (uint16_t i = 0; i < 12; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
