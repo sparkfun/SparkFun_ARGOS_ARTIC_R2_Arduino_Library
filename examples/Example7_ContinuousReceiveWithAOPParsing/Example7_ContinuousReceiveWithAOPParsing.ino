@@ -234,11 +234,12 @@ void loop()
           // 0x9 METOP B
           // 0xA METOP A
           // 0xB METOP C
-          // 0xC NOAA N' ( = NP ? )
+          // 0xC NOAA N' ( = NP)
           // 0xD SARAL
 
           // Process the 'known' satellites
           // The two character satellite identifiers are:
+          // A1 : ANGELS
           // MA : METOP-A
           // MB : METOP-B
           // MC : METOP-C
@@ -247,6 +248,10 @@ void loop()
           // NP : NOAA-19 (appears as 19 in the AOP)
           // SR : SARAL
 
+          case 0x6:
+            Serial.println(F("ANGELS"));
+            bulletin.sat[0] = 'A'; bulletin.sat[1] = '1';
+            break;
           case 0xA:
             Serial.println(F("METOP-A"));
             bulletin.sat[0] = 'M'; bulletin.sat[1] = 'A';
@@ -268,7 +273,7 @@ void loop()
             bulletin.sat[0] = '1'; bulletin.sat[1] = '8';
             break;
           case 0xC:
-            Serial.println(F("NOAA N\'")); // TO DO: check this!
+            Serial.println(F("NOAA N\'"));
             bulletin.sat[0] = '1'; bulletin.sat[1] = '9';
             break;
           case 0xD:
@@ -327,6 +332,7 @@ void loop()
         // Extract the 19-bit semi-major axis (km)
         // Semi-major axis : distance from the apogee (point farthest from the earth) to the center of
         // the earth.
+        // (ANGELS A1's orbit is less than 7000km! I guess ANGELS will need a new definition?)
         uint32_t sma = (((uint32_t)(downlinkMessage.payload[11] & 0x07)) << 16);
         sma |= ((uint32_t)downlinkMessage.payload[12]) << 8;
         sma |= ((uint32_t)downlinkMessage.payload[13]);

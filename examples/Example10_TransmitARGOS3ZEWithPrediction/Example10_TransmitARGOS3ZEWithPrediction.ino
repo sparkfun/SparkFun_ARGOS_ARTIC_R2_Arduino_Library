@@ -212,7 +212,6 @@ void loop()
       Serial.println(F(" MHz."));
       
       // Configure the Tx payload for ARGOS 3 PTT-ZE using our platform ID and 0 bits of user data
-      // TO DO: check if the payload is cleared from memory after transmission is complete. The code assumes it isn't.
       if (myARTIC.setPayloadARGOS3ZE(PLATFORM_ID) == false)
       {
         Serial.println(F("setPayloadARGOS3ZE failed! Freezing..."));

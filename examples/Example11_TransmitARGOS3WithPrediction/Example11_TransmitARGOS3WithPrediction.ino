@@ -24,10 +24,12 @@
     repeats the message transmit numberTransmits times, repetitionPeriod seconds apart;
     repeats for the next satellite pass.
 
-  The messages are ARGOS 3 PPT-A3 and contain the GPS latitude and longitude in a compact form which ARGOS Web will understand.
-  The message contains 56 user bits.
-  Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
-  Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude; the unit is 0.0001 degrees. (Note: this is not two's complement!)
+  The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+  Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
+  The Latitude and Longitude will then be extracted, converted and displayed automatically when you view your data.
+  The number of user bits is 56.
+  Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+  Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 
   Please log in to ARGOS Web https://argos-system.cls.fr/argos-cwi2/login.html
   and copy and paste the latest Satellite AOP (Adapted Orbit Parameters)
@@ -75,12 +77,12 @@ const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass
 
-const uint8_t numARGOSsatellites = 7; // Change this if required to match the number of satellites in the AOP
+const uint8_t numARGOSsatellites = 8; // Change this if required to match the number of satellites in the AOP
 
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
-// Check the alignment: " MA A 5 3 0 2020 10  1 22  7 29  7195.569  98.5114  336.036  -25.341  101.3592   0.00 MB 9 3 0 0 2020 10  1 23 21 58  7195.654  98.7194  331.991  -25.340  101.3604   0.00 MC B 7 3 0 2020 10  1 22 34 23  7195.569  98.6883  344.217  -25.340  101.3587   0.00 15 5 0 0 0 2020 10  1 22 44 11  7180.495  98.7089  308.255  -25.259  101.0408   0.00 18 8 0 0 0 2020 10  1 21 50 32  7225.981  99.0331  354.556  -25.498  102.0000  -0.79 19 C 6 0 0 2020 10  1 22  7  6  7226.365  99.1946  301.174  -25.499  102.0077  -0.54 SR D 4 3 0 2020 10  1 22 33 38  7160.233  98.5416  110.362  -25.154  100.6146  -0.12";
-const char AOP[] =      " MA A 5 3 0 2020 10  1 22  7 29  7195.569  98.5114  336.036  -25.341  101.3592   0.00 MB 9 3 0 0 2020 10  1 23 21 58  7195.654  98.7194  331.991  -25.340  101.3604   0.00 MC B 7 3 0 2020 10  1 22 34 23  7195.569  98.6883  344.217  -25.340  101.3587   0.00 15 5 0 0 0 2020 10  1 22 44 11  7180.495  98.7089  308.255  -25.259  101.0408   0.00 18 8 0 0 0 2020 10  1 21 50 32  7225.981  99.0331  354.556  -25.498  102.0000  -0.79 19 C 6 0 0 2020 10  1 22  7  6  7226.365  99.1946  301.174  -25.499  102.0077  -0.54 SR D 4 3 0 2020 10  1 22 33 38  7160.233  98.5416  110.362  -25.154  100.6146  -0.12";
+// Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
+const char AOP[] =      " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
 
 // Minimum satellite elevation (above the horizon):
 //  Reduce this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -121,6 +123,9 @@ int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTI
 
 uint32_t nextTransmitTime; // Time of the next satellite transmission
 uint8_t remainingTransmits; // Remaining number of satellite transmits
+boolean firstTransmit; // Flag to indicate if this is the first transmission on this satellite pass
+float lat_tx; // The latitude included in the transmitted message
+float lon_tx; // The longitude included in the transmitted message
 
 void setup()
 {
@@ -201,6 +206,9 @@ void loop()
       myARTIC.printARGOSconfiguration(configuration);
     
       // Set the ARGOS 3 TX frequency to 401.630 MHz
+      // From AS3-SP-516-274-CNES: 
+      // The transmission frequency for PTT/PMT-A3 platforms shall be set between 399.91 MHz to 401.68 MHz.
+      // Due to frequency regulations, the frequency ranges [400.05 MHz to 401.0 MHz] and [401.2 MHz to 401.3 MHz] are forbidden for VLD-A4 transmissions.
       if (myARTIC.setARGOS23TxFrequency(401.630) == false)
       {
         Serial.println("setARGOS23TxFrequency failed. Freezing...");
@@ -334,6 +342,8 @@ void loop()
         Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTime));
         Serial.println(F(" UTC"));
   
+        firstTransmit = true; // Set the firstTransmit flag
+  
         loop_step = wait_for_next_pass; // Move on
       }
       else
@@ -393,31 +403,33 @@ void loop()
     case ARTIC_TX:
     {
       // Update the GPS lat and lon - in case we have moved since we calculated the next pass
-      float lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
-      lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
-      float lon_tx = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
-
-      // Print the lat and lon
-      Serial.print(F("GPS Latitude is: "));
-      Serial.println(lat_tx, 4);
-      Serial.print(F("GPS Longitude is: "));
-      Serial.println(lon_tx, 4);
-      Serial.println();
-
-      // Configure the Tx payload for ARGOS 3 PTT-A3 using our platform ID and the latest lat/lon
-      // TO DO: check if the payload is cleared from memory after transmission is complete. The code assumes it isn't.
-      if (myARTIC.setPayloadARGOS3LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
+      // But only if firstTransmit is true as we want to send the exact same data on each satellite pass
+      if (firstTransmit == true)
       {
-        Serial.println(F("setPayloadARGOS3LatLon failed!"));
+        lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
+        lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
+        lon_tx = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
+  
+        // Print the lat and lon
+        Serial.print(F("GPS Latitude is: "));
+        Serial.println(lat_tx, 4);
+        Serial.print(F("GPS Longitude is: "));
+        Serial.println(lon_tx, 4);
         Serial.println();
-        // Read the payload back again and print it
-        myARTIC.readTxPayload();
-        myARTIC.printTxPayload();
-        Serial.println();
-        Serial.println(F("Freezing..."));
-        while (1)
-          ; // Do nothing more
-      }
+  
+        // Configure the Tx payload for ARGOS 3 PTT-A3 using our platform ID and the latest lat/lon
+        if (myARTIC.setPayloadARGOS3LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
+        {
+          Serial.println(F("setPayloadARGOS3LatLon failed!"));
+          Serial.println();
+          // Read the payload back again and print it
+          myARTIC.readTxPayload();
+          myARTIC.printTxPayload();
+          Serial.println();
+          Serial.println(F("Freezing..."));
+          while (1)
+            ; // Do nothing more
+        }
       
 /*
       // Read the payload back again and print it
@@ -425,6 +437,9 @@ void loop()
       myARTIC.printTxPayload();
       Serial.println();
 */
+
+        firstTransmit = false; // Clear the firstTransmit flag
+      }
 
       // Tell the ARTIC to do its thing!
       ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);

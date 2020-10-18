@@ -139,6 +139,10 @@ enum ARTIC_R2_Burst_R_RW_Mode {
 // ARGOS Platform ID Length Bits
 const uint8_t ARTIC_R2_PLATFORM_ID_BITS = 28;
 
+// The ARGOS PTT-A2 message format is defined in:
+// Platform Transmitter Terminal (PTT-A2) - Platform Message Transceiver (PMT-A2)
+// - Physical Layer System Requirements, AS3-SP-516-2098-CNES
+
 // ARGOS PTT-A2 Message Length Bits
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS = 4;
 
@@ -151,6 +155,16 @@ const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_152 = 0x9; // 152 user bits (with a
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits (with a 28-bit Platform ID)
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits (with a 28-bit Platform ID)
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits (with a 28-bit Platform ID)
+
+// ARGOS PTT-A2 messages do not require tail bits as the data is encoded using Manchester encoding
+// not convolutional encoding. However, the ARTIC R2 seems to need fake tail bits to be added
+// for the messages to be transmitted successfully.
+// This has only been checked for 56-user-bit messages. TO DO: check if this is true for the other message lengths
+const uint8_t ARTIC_R2_PTT_A2_NUM_FAKE_TAIL_BITS = 8;
+
+// The ARGOS PTT-A3 message format is defined in:
+// Platform Transmitter Terminal (PTT-A3, including PTT-ZE) - Platform Message Transceiver (PMT-A3)
+// - Physical Layer System Requirements, AS3-SP-516-274-CNES
 
 // ARGOS 3 PTT-A3 Message Length Bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS = 4;
@@ -178,17 +192,57 @@ const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_248 = 8; // 248 user bits
 // ARGOS 3 PTT-ZE Number Of Tail Bits
 const uint8_t ARTIC_R2_PTT_ZE_NUM_TAIL_BITS = 8;
 
-// ARGOS 4 HD Number Of Tail Bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_32 = 8; // 32 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_512 = 8; // 512 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_1024 = 9; // 1024 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_1536 = 7; // 1536 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_2048 = 8; // 2048 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_2560 = 9; // 2560 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3072 = 7; // 3072 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_3584 = 8; // 3584 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4096 = 9; // 4096 user bits
-const uint8_t ARTIC_R2_PTT_A4_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
+// The ARGOS PTT-HD-A3 message format is defined in:
+// Platform Transmitter Terminal (PTT-HD-A3) Platform Message Transceiver (PMT-HD-A3) Physical Layer Requirements
+// AS3-SP-516-273-CNES
+
+// ARGOS PTT-HD-A3 Message Length Bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_BITS = 8;
+
+// ARGOS PTT-HD-A3 Message Lengths
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_32 = 0x00; // 32 user bits (Message service bit == 0)
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_512 = 0x16; // 512 user bits (Message service bit == 0)
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_1024 = 0x2D; // 1024 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_1536 = 0x3B; // 1536 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_2048 = 0x4F; // 2048 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_2560 = 0x59; // 2560 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_3072 = 0x63; // 3072 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_3584 = 0x75; // 3584 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_4096 = 0x8B; // 4096 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_4608 = 0x9D; // 4608 user bits
+
+// ARGOS PTT-HD-A3 Number Of Tail Bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_32 = 8; // 32 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_512 = 8; // 512 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_1024 = 9; // 1024 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_1536 = 7; // 1536 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_2048 = 8; // 2048 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_2560 = 9; // 2560 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_3072 = 7; // 3072 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_3584 = 8; // 3584 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_4096 = 9; // 4096 user bits
+const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
+
+// The ARGOS 4 MD and HD message format is defined in:
+// High Data Rate Platform Transmitter Terminal For ARGOS 4 (PTT/PMT-HD-A4) Physical layer requirements
+// A4-SS-TER-SP-0078-CNES
+
+// TO DO: Add the definitions needed for MD and HD messages:
+// W0 = 0xCC33 33C3 CC3C CC3C
+// W1 = 0x33CC CC3C 33C3 33C3
+// Message Length: MD 1 user packet = W0 W0 W0 W0
+// Message Length: MD 2 user packets = W0 W0 W1 W1
+// Message Length: HD 1 user packet = W0 W1 W0 W1
+// Message Length: HD 2 user packets = W0 W1 W1 W0
+// Message Length: HD 3 user packets = W1 W0 W0 W1
+// Message Length: HD 4 user packets = W1 W0 W1 W0
+// Message Length: HD 5 user packets = W1 W1 W0 W0
+// Num Tail Bits = 3
+// End Word = 0xE312 B65F
+
+// The ARGOS PTT-VLD-A4 (Very Low Data Rate) message format is defined in:
+// Platform Transmitter Terminal (PTT-VLD-A4) - Physical Layer Requirements
+// A4-SS-TER-SP-0079-CNES
 
 // ARGOS 4 VLD Message Length Bits
 const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS = 2;
@@ -199,6 +253,15 @@ const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG = 0x3; // 56 user bits
 
 // ARGOS 4 VLD Number Of Tail Bits
 const uint8_t ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS = 6;
+
+// ARGOS 4 VLD Short messsage length in bits
+// 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 36;
+
+// ARGOS 4 VLD Long messsage length in bits
+// 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
+// plus 28 data bits plus 6 tail bits plus 28 data bits plus 6 tail bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 104;
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
@@ -506,7 +569,8 @@ public:
 	boolean setPayloadARGOS3ZE(uint32_t platformID); // Set the Tx payload for a ARGOS 3 ZE message
 	boolean setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
-	boolean setPayloadARGOS4VLD0(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
+	boolean setPayloadARGOS4VLDshort(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
+	boolean setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 4 VLD message containing GPS lat & lon in a compact form which ARGOS Web understands
 
 	// Storage for message transmission
 	// This storage is used by the setPayloadARGOS functions

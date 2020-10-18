@@ -2731,7 +2731,7 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
 	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus 4 tail bits
 	_txPayloadBytes[7] = 0x00; // Remaining 4 tail bits plus four stuff bits
-	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
 	if (_printDebug == true)
 	{
@@ -2830,11 +2830,16 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	// For PTT-A2 messages, the total message length is the sum of:
 	//   4 message length bits
 	//   28 bits for the Platform ID
-	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248
+	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248 (with a 28-bit Platform ID)
 	// (PTT-A2 messages can also use a 20-bit Platform ID)
+
+	// ARGOS PTT-A2 messages do not require tail bits as the data is encoded using Manchester encoding
+	// not convolutional encoding. However, the ARTIC R2 seems to need fake tail bits to be added
+	// for the messages to be transmitted successfully.
+
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56 + ARTIC_R2_PTT_A2_NUM_FAKE_TAIL_BITS;
 
 	// The payload itself
 	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
@@ -2869,7 +2874,7 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	_txPayloadBytes[11] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
 	_txPayloadBytes[12] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
 	_txPayloadBytes[13] = 0x00; // Eight stuff bits
-	_txPayloadBytes[14] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[14] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS2LatLon: left-justified payload is 0x"));
@@ -2885,38 +2890,93 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 }
 
 // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
-// The payload contains _only_ the 28-bit platform ID (left justified) plus 6 tail bits
+// The payload contains the 2-bit message length plus the 28-bit platform ID (left justified) plus 6 tail bits
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS4VLD0(uint32_t platformID)
+boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 {
 	// Tx length in bits
-	// TO DO: Work out if the payload length needs to include the two message length bits
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS;
-	// Or it could be:
-	//_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	// TO DO: Work out if we need to include the 2-bit message length here?
-	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
-	_txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
-	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
-	// Or it could be:
-	//_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
-	//_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
-	//_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
-	//_txPayloadBytes[6] = (platformID << 2) & 0xF0; // Last 6 bits of the platform ID plus two tail bits
-	//_txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
-	//_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
+	_txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
+	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
 	if (_printDebug == true)
 	{
-		_debugPort->print(F("setPayloadARGOS4VLD0: left-justified payload is 0x"));
+		_debugPort->print(F("setPayloadARGOS4VLDshort: left-justified payload is 0x"));
 		for (uint16_t i = 0; i < 9; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload for a ARGOS 4 VLD long message
+// The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
+// Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
+// The Latitude and Longitude will then be extracted, converted and displayed automatically when you view your data.
+// The number of user bits is 56.
+// Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon)
+{
+	// Tx length in bits
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
+
+	// The payload itself
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
+
+	boolean negative = false;
+	if (Lat < 0.0)
+	{
+		negative = true; // Is the Lat negative?
+		Lat = 0.0 - Lat; // Make it +ve
+	}
+	Lat *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
+	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
+	_txPayloadBytes[7] = (Lat_32 >> 17) & 0x0F; // Four tail bits plus 4 bits of Lat
+	_txPayloadBytes[8] = (Lat_32 >> 9) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[9] = (Lat_32 >> 1) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[10] = (Lat_32 << 7) & 0x80; // Load 1 bit of Lat into the payload
+
+	negative = false;
+	if (Lon < 0.0)
+	{
+		negative = true; // Is the Lon negative?
+		Lon = 0.0 - Lon; // Make it +ve
+	}
+	Lon *= 10000.0; // Shift by 4 decimal places
+	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
+	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	_txPayloadBytes[10] |= (Lon_32 >> 15) & 0x7F; // OR 7 bits of Lon into the payload
+	_txPayloadBytes[11] = (Lon_32 >> 13) & 0x03; // Six tail bits plus 2 bits of Lon
+	_txPayloadBytes[12] = (Lon_32 >> 5) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[13] = (Lon_32 << 3) & 0xE0; // Load 5 bits of Lon into the payload, pad with three stuff bits
+	_txPayloadBytes[14] = 0x00; // Eight stuff bits
+	_txPayloadBytes[15] = 0x00; // Two stuff bits plus six tail bits
+	_txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS4VLDLatLon: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < 18; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
@@ -3824,8 +3884,8 @@ boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satel
 		satelliteParameters[i].params[4] = textToFloat(&AOP[offsetAOP + 69], 4, 4); // Orbital period (min)
 		satelliteParameters[i].params[5] = textToFloat(&AOP[offsetAOP + 79], 3, 2); // Semi-major axis drift (m/day)
 		// Basic syntax checking - just to make sure nothing bad has happened and that the AOP appears to be correctly formatted
-		// Check that the first digit of the satellite identifier is M or 1 or S
-		if ((satelliteParameters[i].sat[0] != 'M') && (satelliteParameters[i].sat[0] != '1') && (satelliteParameters[i].sat[0] != 'S'))
+		// Check that the first digit of the satellite identifier is M or 1 or S or A
+		if ((satelliteParameters[i].sat[0] != 'M') && (satelliteParameters[i].sat[0] != '1') && (satelliteParameters[i].sat[0] != 'S') && (satelliteParameters[i].sat[0] != 'A'))
 		{
 			if (_printDebug == true)
 				_debugPort->print("convertAOPtoParameters: invalid satellite identifier!");
@@ -3838,8 +3898,9 @@ boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satel
 				_debugPort->print("convertAOPtoParameters: AOP date (epoch) is invalid!");
 			result = false;
 		}
-		// Check that the Semi-major axis is >= 7000 and <= 7500
-		if ((satelliteParameters[i].params[0] < 7000) || (satelliteParameters[i].params[0] > 7500))
+		// Check that the Semi-major axis is >= 6500 and <= 7500
+		// (ANGELS is typically 6892km)
+		if ((satelliteParameters[i].params[0] < 6500) || (satelliteParameters[i].params[0] > 7500))
 		{
 			if (_printDebug == true)
 				_debugPort->print("convertAOPtoParameters: semi-major axis is invalid!");
