@@ -156,12 +156,6 @@ const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits (with a
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits (with a 28-bit Platform ID)
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits (with a 28-bit Platform ID)
 
-// ARGOS PTT-A2 messages do not require tail bits as the data is encoded using Manchester encoding
-// not convolutional encoding. However, the ARTIC R2 seems to need fake tail bits to be added
-// for the messages to be transmitted successfully.
-// This has only been checked for 56-user-bit messages. TO DO: check if this is true for the other message lengths
-const uint8_t ARTIC_R2_PTT_A2_NUM_FAKE_TAIL_BITS = 8;
-
 // The ARGOS PTT-A3 message format is defined in:
 // Platform Transmitter Terminal (PTT-A3, including PTT-ZE) - Platform Message Transceiver (PMT-A3)
 // - Physical Layer System Requirements, AS3-SP-516-274-CNES
@@ -200,8 +194,8 @@ const uint8_t ARTIC_R2_PTT_ZE_NUM_TAIL_BITS = 8;
 const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_BITS = 8;
 
 // ARGOS PTT-HD-A3 Message Lengths
-const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_32 = 0x00; // 32 user bits (Message service bit == 0)
-const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_512 = 0x16; // 512 user bits (Message service bit == 0)
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_32 = 0x00; // 32 user bits (Message service bit = 0)
+const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_512 = 0x16; // 512 user bits (Message service bit = 0)
 const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_1024 = 0x2D; // 1024 user bits
 const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_1536 = 0x3B; // 1536 user bits
 const uint8_t ARTIC_R2_PTT_A3_HD_MESSAGE_LENGTH_2048 = 0x4F; // 2048 user bits
@@ -244,24 +238,34 @@ const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
 // Platform Transmitter Terminal (PTT-VLD-A4) - Physical Layer Requirements
 // A4-SS-TER-SP-0079-CNES
 
-// ARGOS 4 VLD Message Length Bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS = 2;
+// From the ARTIC R2 datasheet:
+// "The message length is coded inside the synchronization pattern which is added by the ARTIC."
 
+// So, we do not need to define this:
+// ARGOS 4 VLD Message Length Bits
+//const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_BITS = 2;
+
+// Or these:
 // ARGOS 4 VLD Message Lengths (2-bit)
-const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT = 0x0; // 0 user bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG = 0x3; // 56 user bits
+//const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT = 0x0; // 0 user bits
+//const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG = 0x3; // 56 user bits
 
 // ARGOS 4 VLD Number Of Tail Bits
 const uint8_t ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS = 6;
 
 // ARGOS 4 VLD Short messsage length in bits
 // 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 36;
+//const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 36;
+// 28-bit Platform ID plus 6 tail bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 34;
 
 // ARGOS 4 VLD Long messsage length in bits
 // 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
 // plus 28 data bits plus 6 tail bits plus 28 data bits plus 6 tail bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 104;
+//const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 104;
+// 28-bit Platform ID plus 6 tail bits
+// plus 28 data bits plus 6 tail bits plus 28 data bits plus 6 tail bits
+const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 102;
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
@@ -416,7 +420,7 @@ typedef struct {
 // Originally written by CLS
 // Code is taken from Arribada's prepas.h
 
-#define ARTIC_R2_MAX_NUM_SATS (8)
+#define ARTIC_R2_MAX_NUM_SATS (10) // Create some headroom for the next two ANGELS satellites. Was 8.
 
 #define ARTIC_R2_MAXLU 132
 #define sortie_erreur -1
@@ -492,6 +496,7 @@ const   int pas = ARTIC_R2_MINIMUM_PAS;      /* en (sec)     */
 
 const   float   rt  = 6378.137;              /* Earth radius     */
 const   float   rs  = 7200;                  /* Orbit radius     */
+const   float   rs_a  = 6890;                /* Orbit radius for ANGELS (Added by Paul) */
 
 const int TIME_CONVERTOR = 631152000; /* Change apoch from 1990 to 1970 */
 
@@ -597,7 +602,7 @@ public:
 	void invertPWNENpin(boolean invert = true);
 
 	// Arribada / CLS Satellite Pass Predictor
-	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time);
+	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time, int max_npass = 1);
 
 	// Satellite pass prediciton helper tools
 	boolean convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
@@ -658,7 +663,7 @@ private:
 	                 float  wt,
 
 	                 float  *d2);       /* output */
-	uint8_t select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time);
+	int select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time);
 	void print_list(predictionParameters * p_pp,  int number_sat);
 	void print_config(configurationParameters *p_pc);
 	void print_sat(orbitParameters *p_po, int number_sat);

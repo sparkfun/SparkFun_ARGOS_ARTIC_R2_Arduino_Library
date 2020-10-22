@@ -2,7 +2,7 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: September 25th 2020
+  Date: October 21st 2020
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -50,8 +50,6 @@
   Feel like supporting our work? Buy a board from SparkFun!
   https://www.sparkfun.com/products/
 
-  This example requires a receiver address. Copy and paste your 48-bit receiver address into ADDRESS_LS_BITS and ADDRESS_MS_BITS
-
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
   Hardware Connections:
@@ -75,7 +73,8 @@
 const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
-const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass
+const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
+const uint32_t tcxoWarmupTime = 10; // Start the transmit this many seconds early to compensate for the TCXO warmup time
 
 const uint8_t numARGOSsatellites = 8; // Change this if required to match the number of satellites in the AOP
 
@@ -85,9 +84,9 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 const char AOP[] =      " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
 
 // Minimum satellite elevation (above the horizon):
-//  Reduce this to 5 to 20 degrees if you have a clear view to the horizon.
+//  Set this to 5 to 20 degrees if you have a clear view to the horizon.
 //  45 degrees is really only suitable for urban environments and will severely limit the number of transmit windows...
-float min_elevation = 45.0;
+float min_elevation = 15.0;
 
 #include <SPI.h>
 
@@ -309,29 +308,26 @@ void loop()
       Serial.print(F("The number of seconds since the epoch will be: "));
       Serial.println(nextSatellitePass);
 
-      if (numberTransmits <= 1)
-      {
-        nextTransmitTime = nextSatellitePass; // Time of next transmit
-        remainingTransmits = 1; // Remaining number of satellite transmits
-      }
-      else
+      if (numberTransmits >= 1)
       {
         nextTransmitTime = nextSatellitePass - (((numberTransmits - 1) / 2) * repetitionPeriod);
+        nextTransmitTime -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
         remainingTransmits = numberTransmits; // Remaining number of satellite transmits
 
         //nextTransmitTime = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
       }
+      else
+      {
+        remainingTransmits = 0; // Remaining number of satellite transmits
+      }
 
-      // If multiple transmits should have already started (i.e. nextTransmitTime < epochNow)
+      // If transmits should have already started (i.e. nextTransmitTime < epochNow)
       // then add repetitionPeriod to nextTransmitTime and decrement remainingTransmits
       // to avoid violating the repetitionPeriod on the next transmit
-      if ((remainingTransmits > 1) && (nextTransmitTime < epochNow))
+      while ((remainingTransmits > 0) && (nextTransmitTime < epochNow))
       {
-        while ((remainingTransmits > 1) && (nextTransmitTime < epochNow))
-        {
-          nextTransmitTime += repetitionPeriod;
-          remainingTransmits--;
-        }
+        nextTransmitTime += repetitionPeriod;
+        remainingTransmits--;
       }
 
       if (remainingTransmits >= 1)
@@ -382,8 +378,8 @@ void loop()
       }
 
       // Check for a GPS time glitch
-      // Stay in wait_for_next_pass if secsRemaining < -60
-      if (secsRemaining < -60)
+      // Stay in wait_for_next_pass if secsRemaining < -10
+      if (secsRemaining < -10)
       {
         Serial.println(F("GPS time glitch? Ignoring..."));
       }
@@ -432,10 +428,10 @@ void loop()
         }
 
 /*
-      // Read the payload back again and print it
-      myARTIC.readTxPayload();
-      myARTIC.printTxPayload();
-      Serial.println();
+        // Read the payload back again and print it
+        myARTIC.readTxPayload();
+        myARTIC.printTxPayload();
+        Serial.println();
 */
 
         firstTransmit = false; // Clear the firstTransmit flag

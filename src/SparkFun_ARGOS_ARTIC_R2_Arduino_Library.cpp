@@ -2833,13 +2833,9 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248 (with a 28-bit Platform ID)
 	// (PTT-A2 messages can also use a 20-bit Platform ID)
 
-	// ARGOS PTT-A2 messages do not require tail bits as the data is encoded using Manchester encoding
-	// not convolutional encoding. However, the ARTIC R2 seems to need fake tail bits to be added
-	// for the messages to be transmitted successfully.
-
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56 + ARTIC_R2_PTT_A2_NUM_FAKE_TAIL_BITS;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56;
 
 	// The payload itself
 	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
@@ -2900,11 +2896,17 @@ boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
-	_txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
+	// _txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
+	// _txPayloadBytes[4] = (platformID >> 14) & 0xFF;
+	// _txPayloadBytes[5] = (platformID >> 6) & 0xFF;
+	// _txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
+	// _txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
+	// _txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[3] = ((platformID >> 20) & 0xFF); // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
 	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
 	if (_printDebug == true)
@@ -2937,10 +2939,14 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	_txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 14) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 6) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
+	// _txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
+	// _txPayloadBytes[4] = (platformID >> 14) & 0xFF;
+	// _txPayloadBytes[5] = (platformID >> 6) & 0xFF;
+	// _txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
+	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -2951,10 +2957,13 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	Lat *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
 	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
-	_txPayloadBytes[7] = (Lat_32 >> 17) & 0x0F; // Four tail bits plus 4 bits of Lat
-	_txPayloadBytes[8] = (Lat_32 >> 9) & 0xFF; // Load 8 bits of Lat into the payload
-	_txPayloadBytes[9] = (Lat_32 >> 1) & 0xFF; // Load 8 bits of Lat into the payload
-	_txPayloadBytes[10] = (Lat_32 << 7) & 0x80; // Load 1 bit of Lat into the payload
+	// _txPayloadBytes[7] = (Lat_32 >> 17) & 0x0F; // Four tail bits plus 4 bits of Lat
+	// _txPayloadBytes[8] = (Lat_32 >> 9) & 0xFF; // Load 8 bits of Lat into the payload
+	// _txPayloadBytes[9] = (Lat_32 >> 1) & 0xFF; // Load 8 bits of Lat into the payload
+	// _txPayloadBytes[10] = (Lat_32 << 7) & 0x80; // Load 1 bit of Lat into the payload
+	_txPayloadBytes[7] = (Lat_32 >> 15) & 0x3F; // Two tail bits plus 6 bits of Lat
+	_txPayloadBytes[8] = (Lat_32 >> 7) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[9] = (Lat_32 << 1) & 0xFE; // Load 7 bits of Lat into the payload
 
 	negative = false;
 	if (Lon < 0.0)
@@ -2964,13 +2973,22 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	}
 	Lon *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
-	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
-	_txPayloadBytes[10] |= (Lon_32 >> 15) & 0x7F; // OR 7 bits of Lon into the payload
-	_txPayloadBytes[11] = (Lon_32 >> 13) & 0x03; // Six tail bits plus 2 bits of Lon
-	_txPayloadBytes[12] = (Lon_32 >> 5) & 0xFF; // Load 8 bits of Lon into the payload
-	_txPayloadBytes[13] = (Lon_32 << 3) & 0xE0; // Load 5 bits of Lon into the payload, pad with three stuff bits
+	//if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	if (negative) _txPayloadBytes[9] |= 0x01; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	// _txPayloadBytes[10] |= (Lon_32 >> 15) & 0x7F; // OR 7 bits of Lon into the payload
+	// _txPayloadBytes[11] = (Lon_32 >> 13) & 0x03; // Six tail bits plus 2 bits of Lon
+	// _txPayloadBytes[12] = (Lon_32 >> 5) & 0xFF; // Load 8 bits of Lon into the payload
+	// _txPayloadBytes[13] = (Lon_32 << 3) & 0xF8; // Load 5 bits of Lon into the payload, pad with three stuff bits
+	// _txPayloadBytes[14] = 0x00; // Eight stuff bits
+	// _txPayloadBytes[15] = 0x00; // Two stuff bits plus six tail bits
+	// _txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	// _txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[10] = (Lon_32 >> 15) & 0xFC; // Load 6 bits of Lon into the payload plus two tail bits
+	_txPayloadBytes[11] = (Lon_32 >> 11) & 0x0F; // Four tail bits plus 4 bits of Lon
+	_txPayloadBytes[12] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[13] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
 	_txPayloadBytes[14] = 0x00; // Eight stuff bits
-	_txPayloadBytes[15] = 0x00; // Two stuff bits plus six tail bits
+	_txPayloadBytes[15] = 0x00; // Six tail bits plus two stuff bits
 	_txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 	_txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 	if (_printDebug == true)
@@ -3290,7 +3308,9 @@ void ARTIC_R2::invertPWNENpin(boolean invert)
 /*    ---------------------------------------------------------------   */
 
 // WARN: number_sat must be greater than 0
-uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time)
+// October 21st 2020: Paul added max_npass as a parameter (default is 1). This is to allow prediction of the next pass
+// when calculating the prediction for a single satellite at a time which is close to the previous pass.
+uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time, int max_npass)
 {
 	// if (_printDebug == true)
 	// 	_debugPort->println("predictNextSatellitePass: start");
@@ -3312,7 +3332,7 @@ uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min
   tab_PC[0].marge_geog_lat = 0;
   tab_PC[0].marge_geog_lon = 0;
 
-  tab_PC[0].Npass_max = 1;
+  tab_PC[0].Npass_max = max_npass;
 
   orbitParameters  *pt_po;          /* pointer on tab_po            */
   configurationParameters  *pt_pc;  /* pointer on tab_pc            */
@@ -3357,7 +3377,11 @@ uint32_t ARTIC_R2::predictNextSatellitePass(bulletin_data_t *bulletin, float min
 	// if (_printDebug == true)
 	// 	_debugPort->println("predictNextSatellitePass: calling select_closest");
 
-  uint8_t index = select_closest(pt_pp, number_sat, current_time);
+	// October 21st 2020: Paul changed select_closest so it will return -1 if there is no closest satellite.
+	// This helps when calculating the prediction for a single satellite at a time which is close to the previous pass.
+	// Previously the function would have returned a valid index of zero if the single prediction was in the past.
+  int index = select_closest(pt_pp, number_sat, current_time);
+	if (index < 0) return 0; // If there is no closest satellite, return a next pass time of zero.
 
   return (pt_pp[index].tpp + (pt_pp[index].duree / 2));
 }
@@ -3391,7 +3415,7 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
     long t0;     /* date (sec) */
     long t1;     /* date (sec) */
     long t2;     /* date (sec) */
-    long tmil[8];    /* date milieu du prochain passage/satellite */
+    long tmil[ARTIC_R2_MAX_NUM_SATS];    /* date milieu du prochain passage/satellite */
 
     int isat;
     int step = 0;
@@ -3412,8 +3436,8 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
 
     int site_max;   /* min site */
     int marge;
-    int table_site_max[8];                  /* DB */
-    int table_duree[8];                     /* DB */
+    int table_site_max[ARTIC_R2_MAX_NUM_SATS];                  /* DB */
+    int table_duree[ARTIC_R2_MAX_NUM_SATS];                     /* DB */
     float   delta_lon;  /* asc.node drift during one revolution (deg) */
     float   wt;     /* earth rotation */
 
@@ -3470,16 +3494,6 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
     y_pf = cos (v_lat) * sin (v_lon);
     z_pf = sin (v_lat);
 
-    v_site_min_requis = v_site_min_requis * deg_rad;
-    visi_min = demi_pi - v_site_min_requis - asin(rt / rs * cos(v_site_min_requis));
-    visi_min = 2. * sin(visi_min / 2.);
-    visi_min = visi_min * visi_min;
-
-    visi_max = v_site_max_requis * deg_rad;
-    visi_max   = demi_pi - visi_max - asin(rt / rs * cos(visi_max));
-    visi_max   = 2. * sin(visi_max / 2.);
-    visi_max   = visi_max * visi_max;
-
 
     s_deb = p_pc[0].time_start - TIME_CONVERTOR;
     s_fin = p_pc[0].time_end - TIME_CONVERTOR;
@@ -3499,6 +3513,20 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
     //while (((isat-1) < 8) && (strncmp(p_po[isat-1].sat, "  ",2)!=0 )) {
     for (isat = 1; isat <= number_sat; isat ++)
     {
+				float radius = rs; // Orbit radius
+				if (p_po[isat - 1].sat[0] == 'A') radius = rs_a; // Added by Paul to improve max elevation calculations for ANGELS
+
+				// Moved by Paul so the correct radius is used to calculate visi_min and _max
+				v_site_min_requis = v_site_min_requis * deg_rad;
+		    visi_min = demi_pi - v_site_min_requis - asin(rt / radius * cos(v_site_min_requis));
+		    visi_min = 2. * sin(visi_min / 2.);
+		    visi_min = visi_min * visi_min;
+
+		    visi_max = v_site_max_requis * deg_rad;
+		    visi_max   = demi_pi - visi_max - asin(rt / radius * cos(visi_max));
+		    visi_max   = 2. * sin(visi_max / 2.);
+		    visi_max   = visi_max * visi_max;
+
 
         p_pp[isat - 1].tpp = 0;
         sin_i    = sin(p_po[isat - 1].inc * deg_rad);
@@ -3571,7 +3599,7 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
 
                 duree = duree + pas;
                 v = 2.*asin(sqrt(d2) / 2.);
-                temp =  (rs * sin(v)) / sqrt(rt * rt + rs * rs - 2 * rt * rs * cos(v));
+                temp =  (radius * sin(v)) / sqrt(rt * rt + radius * radius - 2 * rt * radius * cos(v));
                 temp =  rad_deg * acos(temp);
                 site = (int) (temp);
                 if (site > site_max) site_max = site;
@@ -3660,9 +3688,6 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
 
     } /* lecture de chaque bulletin de satellite */
 
-
-
-
     return 0;
 }
 
@@ -3681,8 +3706,8 @@ void ARTIC_R2::su_distance(   long    t1,     /* input */
                     float   *d2)        /* output */
 
 {
-    float   lat_sat;    /*  latitude of the satellite beetween the a.n  */
-    float   long_sat_an;    /*  longitude of the satellite beetween the a.n */
+    float   lat_sat;    /*  latitude of the satellite between the a.n  */
+    float   long_sat_an;    /*  longitude of the satellite between the a.n */
     float   long_sat;   /*  longitude of the satellite          */
     float   x, y, z;        /*  satellite position              */
 
@@ -3724,17 +3749,20 @@ void ARTIC_R2::su_distance(   long    t1,     /* input */
 
 }
 
-uint8_t ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time)
+// October 21st 2020: Paul changed select_closest so it will return -1 if there is no closest satellite.
+// This helps when calculating the prediction for a single satellite at a time which is close to the previous pass.
+// Previously the function would have returned a valid index of zero if the single prediction was in the past.
+int ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, uint32_t desired_time)
 {
     uint32_t min = 0xFFFFFFFF;
-    uint8_t index = 0;
+    int index = -1; // Return -1 if no satellites are closest
     uint32_t current = 0;
 
     for (int i = 0; i < number_sat; ++i)
     {
         current = pt_pp[i].tpp + (pt_pp[i].duree / 2);
 
-        if (current > desired_time && ((current - desired_time) < min) )
+        if ((current > desired_time) && ((current - desired_time) < min) )
         {
             min = (current - desired_time);
             index = i;
@@ -3743,15 +3771,22 @@ uint8_t ARTIC_R2::select_closest(predictionParameters *pt_pp, int number_sat, ui
 
 		if (_printDebug == true)
 		{
-    	_debugPort->print("SAT SELECTED: ");
-			_debugPort->write(pt_pp[index].sat[0]);
-			_debugPort->write(pt_pp[index].sat[1]);
-			_debugPort->print("\tINDEX: ");
-			_debugPort->print(index);
-			_debugPort->print("\tDESIRED TIME: ");
-			_debugPort->print(desired_time);
-			_debugPort->print("\tNEXT PASS: ");
-			_debugPort->println((pt_pp[index].tpp + (pt_pp[index].duree / 2)));
+			if (index >= 0)
+			{
+	    	_debugPort->print("SAT SELECTED: ");
+				_debugPort->write(pt_pp[index].sat[0]);
+				_debugPort->write(pt_pp[index].sat[1]);
+				_debugPort->print("\tINDEX: ");
+				_debugPort->print(index);
+				_debugPort->print("\tDESIRED TIME: ");
+				_debugPort->print(desired_time);
+				_debugPort->print("\tNEXT PASS: ");
+				_debugPort->println((pt_pp[index].tpp + (pt_pp[index].duree / 2)));
+			}
+			else
+			{
+				_debugPort->println("SAT SELECTED: *** NONE ***");
+			}
 		}
 
     return index;
@@ -3761,6 +3796,7 @@ void ARTIC_R2::print_list(predictionParameters * p_pp,  int number_sat)
 {
 	if (_printDebug == true)
 	{
+		_debugPort->print("\r\n------------PREDICTION PARAMETERS-----------\r\n\r\n");
     for (int i = 0; i < number_sat; ++i)
     {
         _debugPort->print("sat ");
@@ -3798,7 +3834,7 @@ void ARTIC_R2::print_config(configurationParameters *p_pc)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("\n------------CONFIG STRUCT----------\n\n");
+		_debugPort->print("\r\n----------CONFIGURATION PARAMETERS----------\r\n\r\n");
 		_debugPort->print("Latitude ");
 		_debugPort->print(p_pc[0].pf_lat, 4);
     _debugPort->print("\tLongitude ");
@@ -3828,7 +3864,7 @@ void ARTIC_R2::print_sat(orbitParameters *p_po, int number_sat)
 {
 	if (_printDebug == true)
 	{
-    _debugPort->print("\n--------------CONFIG SAT-----------\n\n");
+		_debugPort->print("\r\n--------------ORBIT PARAMETERS--------------\r\n\r\n");
     for (int i = 0; i < number_sat; ++i)
     {
         _debugPort->print("NAME: ");
@@ -3973,7 +4009,7 @@ uint32_t ARTIC_R2::convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t d
 // Pretty-print the AOP bulletin
 // Also prints using the same text format as the ARGOS Web AOP tool
 // so the data can be cut and pasted into other code and processed using convertAOPtoParameters
-// Returns true if the satellite ID is MA, MB, MC, 15, 18, 19 or SR (i.e. will be included in the ARGOS Web AOP and has a known two character ID)
+// Returns true if the satellite ID is A1, MA, MB, MC, 15, 18, 19 or SR (i.e. will be included in the ARGOS Web AOP and has a known two character ID)
 boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 {
 	port.println(F("AOP Bulletin:"));
@@ -4034,6 +4070,7 @@ boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '5')) ||
 		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '8')) ||
 		((bulletin.sat[0] == '1') && (bulletin.sat[1] == '9')) ||
+		((bulletin.sat[0] == 'A') && (bulletin.sat[1] == '1')) ||
 		((bulletin.sat[0] == 'S') && (bulletin.sat[1] == 'R')))
 		return true;
 	else

@@ -14,7 +14,7 @@
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
     sets the satellite detection timeout to 60 seconds;
-    sets the TX mode to ARGOS PTT-ZE;
+    sets the TX mode to ARGOS A4 VLD;
     sets the TX frequency;
     reads the GPS time, latitude and longitude;
     calculates the next satellite pass;
@@ -24,7 +24,7 @@
     repeats the message transmit numberTransmits times, repetitionPeriod seconds apart;
     repeats for the next satellite pass.
 
-  The ARGOS 3 PTT-ZE message contains only the 28-bit platform ID. Please change PLATFORM_ID below to your ID.
+  The ARGOS A4 VLD Short message contains only the 28-bit platform ID. Please change PLATFORM_ID below to your ID.
 
   Please log in to ARGOS Web https://argos-system.cls.fr/argos-cwi2/login.html
   and copy and paste the latest Satellite AOP (Adapted Orbit Parameters)
@@ -71,12 +71,13 @@ const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits 
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
 const uint32_t tcxoWarmupTime = 10; // Start the transmit this many seconds early to compensate for the TCXO warmup time
 
-const uint8_t numARGOSsatellites = 8; // Change this if required to match the number of satellites in the AOP
+const uint8_t numARGOSsatellites = 1; // Change this if required to match the number of satellites in the AOP
 
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
-// Check the alignment: " A1 6 0 0 1 2020 10 20 23  1 47  6891.750  97.4609  100.962  -23.755   95.0205  -2.01 MA A 5 3 0 2020 10 20 22 14 34  7195.535  98.5080  333.856  -25.341  101.3585   0.00 MB 9 3 0 0 2020 10 20 23 29  7  7195.617  98.7150  330.236  -25.340  101.3597   0.00 MC B 7 3 0 2020 10 20 22 41 29  7195.665  98.7227  342.464  -25.340  101.3607   0.00 15 5 0 0 0 2020 10 20 23  5 53  7180.431  98.7070  302.986  -25.259  101.0395  -0.14 18 8 0 0 0 2020 10 20 21 26 34  7226.085  99.0291    0.969  -25.499  102.0023  -0.83 19 C 6 0 0 2020 10 20 23 27 13  7226.362  99.1953  281.915  -25.499  102.0076  -0.43 SR D 4 3 0 2020 10 20 22 40 36  7160.228  98.5415  108.608  -25.154  100.6144  -0.12";
-const char AOP[] =      " A1 6 0 0 1 2020 10 20 23  1 47  6891.750  97.4609  100.962  -23.755   95.0205  -2.01 MA A 5 3 0 2020 10 20 22 14 34  7195.535  98.5080  333.856  -25.341  101.3585   0.00 MB 9 3 0 0 2020 10 20 23 29  7  7195.617  98.7150  330.236  -25.340  101.3597   0.00 MC B 7 3 0 2020 10 20 22 41 29  7195.665  98.7227  342.464  -25.340  101.3607   0.00 15 5 0 0 0 2020 10 20 23  5 53  7180.431  98.7070  302.986  -25.259  101.0395  -0.14 18 8 0 0 0 2020 10 20 21 26 34  7226.085  99.0291    0.969  -25.499  102.0023  -0.83 19 C 6 0 0 2020 10 20 23 27 13  7226.362  99.1953  281.915  -25.499  102.0076  -0.43 SR D 4 3 0 2020 10 20 22 40 36  7160.228  98.5415  108.608  -25.154  100.6144  -0.12";
+// At the time of writing, only ANGELS A1 supports ARGOS-4
+// Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04";
+const char AOP[] =      " A1 6 0 0 1 2020 10 20 23  1 47  6891.750  97.4609  100.962  -23.755   95.0205  -2.01";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -181,8 +182,8 @@ void loop()
           ; // Do nothing more
       }
 
-      // Set the TX mode to ARGOS 3 PTT-ZE
-      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_ZE_TX_MODE);
+      // Set the TX mode to ARGOS 4 VLD
+      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE);
       myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
       if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
       {
@@ -196,24 +197,27 @@ void loop()
       myARTIC.readARGOSconfiguration(&configuration);
       myARTIC.printARGOSconfiguration(configuration);
 
-      // Set the ARGOS 3 TX frequency to 401.630 MHz
-      if (myARTIC.setARGOS23TxFrequency(401.630) == false)
+      // Set the ARGOS 4 TX frequency to 401.630 MHz
+      // From A4-SS-TER-SP-0079-CNES:
+      // The transmission frequency for PTT-VLD-A4 platforms shall be set between 399.91 MHz to 401.68 MHz.
+      // Due to frequency regulations, the frequency ranges [400.05 MHz to 401.0 MHz] and [401.2 MHz to 401.3 MHz] are forbidden for VLD-A4 transmissions.
+      if (myARTIC.setARGOS4TxFrequency(401.630) == false)
       {
-        Serial.println("setARGOS23TxFrequency failed. Freezing...");
+        Serial.println("setARGOS4TxFrequency failed. Freezing...");
         while (1)
           ; // Do nothing more
       }
 
       // Print the TX frequency
-      float tx23freq = myARTIC.getARGOS23TxFrequency();
-      Serial.print(F("The ARGOS 2/3 TX Frequency is "));
-      Serial.print(tx23freq, 3);
+      float tx4freq = myARTIC.getARGOS4TxFrequency();
+      Serial.print(F("The ARGOS 4 TX Frequency is "));
+      Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
 
-      // Configure the Tx payload for ARGOS 3 PTT-ZE using our platform ID and 0 bits of user data
-      if (myARTIC.setPayloadARGOS3ZE(PLATFORM_ID) == false)
+      // Configure the Tx payload for ARGOS A4 VLD Short using our platform ID and 0 bits of user data
+      if (myARTIC.setPayloadARGOS4VLDshort(PLATFORM_ID) == false)
       {
-        Serial.println(F("setPayloadARGOS3ZE failed! Freezing..."));
+        Serial.println(F("setPayloadARGOS4VLDshort failed! Freezing..."));
         while (1)
           ; // Do nothing more
       }
@@ -296,7 +300,20 @@ void loop()
       Serial.println(lon, 4);
 
       // Predict the next satellite pass
-      uint32_t nextSatellitePass = myARTIC.predictNextSatellitePass(satelliteParameters, min_elevation, numARGOSsatellites, lon, lat, epochNow);
+      // Since we are calculating the prediction for only one satellite, predictNextSatellitePass can return a result which is in the past.
+      // We can trap this and run the prediction again, incrementing max_npass each time until we get a prediction which is in the future.
+      uint32_t nextSatellitePass = 0;
+      int max_npass = 1;
+      while (nextSatellitePass < epochNow)
+      {
+        nextSatellitePass = myARTIC.predictNextSatellitePass(satelliteParameters, min_elevation, numARGOSsatellites, lon, lat, epochNow, max_npass);
+        if (nextSatellitePass < epochNow)
+        {
+          max_npass++;
+          Serial.print(F("Warning: predictNextSatellitePass returned a time which is in the past. Trying again. Attempt #"));
+          Serial.println(max_npass);
+        }
+      }
 
       // Print the prediction
       Serial.print(F("The middle of the next satellite pass will take place at: "));
@@ -435,7 +452,7 @@ void loop()
 
       if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
       {
-        Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened... ARGOS PTT-ZE is as simple as it gets!)"));
+        Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened... ARGOS A4 VLD Short is as simple as it gets!)"));
       }
 
       Serial.println();
