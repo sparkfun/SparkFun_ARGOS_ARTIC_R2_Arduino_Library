@@ -3520,15 +3520,15 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
 				float radius = p_po[isat - 1].dga;
 
 				// Moved by Paul so the correct radius is used to calculate visi_min and _max
-				v_site_min_requis = v_site_min_requis * deg_rad;
-		    visi_min = demi_pi - v_site_min_requis - asin(rt / radius * cos(v_site_min_requis));
+				visi_min = v_site_min_requis * deg_rad;
+		    visi_min = demi_pi - visi_min - asin(rt / radius * cos(visi_min));
 		    visi_min = 2. * sin(visi_min / 2.);
 		    visi_min = visi_min * visi_min;
 
-		    visi_max = v_site_max_requis * deg_rad;
-		    visi_max   = demi_pi - visi_max - asin(rt / radius * cos(visi_max));
-		    visi_max   = 2. * sin(visi_max / 2.);
-		    visi_max   = visi_max * visi_max;
+				visi_max = v_site_max_requis * deg_rad;
+		    visi_max = demi_pi - visi_max - asin(rt / radius * cos(visi_max));
+		    visi_max = 2. * sin(visi_max / 2.);
+		    visi_max = visi_max * visi_max;
 
 
         p_pp[isat - 1].tpp = 0;
