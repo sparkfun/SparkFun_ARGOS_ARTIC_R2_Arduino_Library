@@ -3513,8 +3513,11 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
     //while (((isat-1) < 8) && (strncmp(p_po[isat-1].sat, "  ",2)!=0 )) {
     for (isat = 1; isat <= number_sat; isat ++)
     {
-				float radius = rs; // Orbit radius
-				if (p_po[isat - 1].sat[0] == 'A') radius = rs_a; // Added by Paul to improve max elevation calculations for ANGELS
+				//float radius = rs; // Orbit radius
+				//if (p_po[isat - 1].sat[0] == 'A') radius = rs_a; // Added by Paul to improve max elevation calculations for ANGELS
+
+				// Or, even better...
+				float radius = p_po[isat - 1].dga;
 
 				// Moved by Paul so the correct radius is used to calculate visi_min and _max
 				v_site_min_requis = v_site_min_requis * deg_rad;
