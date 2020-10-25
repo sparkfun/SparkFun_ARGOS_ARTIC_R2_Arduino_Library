@@ -250,14 +250,17 @@ const uint8_t ARTIC_R2_PTT_A3_HD_NUM_TAIL_BITS_4608 = 7; // 4608 user bits
 //const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT = 0x0; // 0 user bits
 //const uint8_t ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG = 0x3; // 56 user bits
 
+// This seems to be redundant too:
 // ARGOS 4 VLD Number Of Tail Bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS = 6;
+//const uint8_t ARTIC_R2_PTT_A4_VLD_NUM_TAIL_BITS = 6;
 
 // ARGOS 4 VLD Short messsage length in bits
 // 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
 //const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 36;
 // 28-bit Platform ID plus 6 tail bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 34;
+//const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 34;
+// 28-bit Platform ID only. The ARTIC adds the tail bits.
+const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 28;
 
 // ARGOS 4 VLD Long messsage length in bits
 // 2-bit message length plus the 28-bit Platform ID plus 6 tail bits
@@ -265,7 +268,9 @@ const uint8_t ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS = 34;
 //const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 104;
 // 28-bit Platform ID plus 6 tail bits
 // plus 28 data bits plus 6 tail bits plus 28 data bits plus 6 tail bits
-const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 102;
+//const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 102;
+// 28-bit Platform ID plus 28 data bits plus 28 data bits. The ARTIC adds the tail bits.
+const uint8_t ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS = 84;
 
 // MCU Configuration Commands
 //const uint8_t CONFIG_CMD_SET_ARGOS_4_RX_MODE = 0x01; // Unsupported by ARTIC006! Use ARGOS 3 RX.
