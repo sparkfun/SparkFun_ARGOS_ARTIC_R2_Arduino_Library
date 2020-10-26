@@ -2886,9 +2886,8 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 }
 
 // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
-//// The payload contains the 2-bit message length plus the 28-bit platform ID (left justified) plus 6 tail bits
-//// The payload contains the 28-bit platform ID (left justified) plus 6 tail bits
-// The payload contains only the 28-bit platform ID (left justified). The ARTIC adds the tail bits.
+// The payload contains the 28-bit platform ID (left justified) plus 6 tail bits
+// The ARTIC adds the two message length bits after the sync pattern
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 {
@@ -2898,23 +2897,11 @@ boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	// _txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_SHORT << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
-	// _txPayloadBytes[4] = (platformID >> 14) & 0xFF;
-	// _txPayloadBytes[5] = (platformID >> 6) & 0xFF;
-	// _txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
-	// _txPayloadBytes[7] = 0x00; // Last four tail bits plus four stuff bits
-	// _txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-
 	_txPayloadBytes[3] = ((platformID >> 20) & 0xFF); // Left justify the 28-bit platform ID
 	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-
-	// _txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
-	// _txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
-	// _txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four stuff bits
-	_txPayloadBytes[7] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
 	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
 	if (_printDebug == true)
@@ -2938,6 +2925,7 @@ boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 // The number of user bits is 56.
 // Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
+// The ARTIC adds the two message length bits after the sync pattern
 // Returns true if the payload was set successfully
 boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon)
 {
@@ -2947,15 +2935,10 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	// _txPayloadBytes[3] = (ARTIC_R2_PTT_A4_VLD_MESSAGE_LENGTH_LONG << 6) | ((platformID >> 22) & 0x3F); // Left justify the 28-bit platform ID
-	// _txPayloadBytes[4] = (platformID >> 14) & 0xFF;
-	// _txPayloadBytes[5] = (platformID >> 6) & 0xFF;
-	// _txPayloadBytes[6] = (platformID << 2) & 0xFC; // Last 6 bits of the platform ID plus two tail bits
 	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
 	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
 	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	// _txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -2966,17 +2949,9 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	Lat *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lat_32 = (uint32_t)Lat; // Convert to uint32_t
 	if (negative) Lat_32 |= 0x100000; // Set the MS bit if Lat was negative (note: this is not two's complement)
-	// _txPayloadBytes[7] = (Lat_32 >> 17) & 0x0F; // Four tail bits plus 4 bits of Lat
-	// _txPayloadBytes[8] = (Lat_32 >> 9) & 0xFF; // Load 8 bits of Lat into the payload
-	// _txPayloadBytes[9] = (Lat_32 >> 1) & 0xFF; // Load 8 bits of Lat into the payload
-	// _txPayloadBytes[10] = (Lat_32 << 7) & 0x80; // Load 1 bit of Lat into the payload
-	// _txPayloadBytes[7] = (Lat_32 >> 15) & 0x3F; // Two tail bits plus 6 bits of Lat
-	// _txPayloadBytes[8] = (Lat_32 >> 7) & 0xFF; // Load 8 bits of Lat into the payload
-	// _txPayloadBytes[9] = (Lat_32 << 1) & 0xFE; // Load 7 bits of Lat into the payload
-	_txPayloadBytes[6] |= (Lat_32 >> 17) & 0x0F; // Add 4 bits of Lat
-	_txPayloadBytes[7] = (Lat_32 >> 9) & 0xFF; // Load 8 bits of Lat
-	_txPayloadBytes[8] = (Lat_32 >> 1) & 0xFF; // Load 8 bits of Lat into the payload
-	_txPayloadBytes[9] = (Lat_32 << 7) & 0x80; // Load 1 bit of Lat into the payload
+	_txPayloadBytes[7] = (Lat_32 >> 15) & 0x3F; // Two tail bits plus 6 bits of Lat
+	_txPayloadBytes[8] = (Lat_32 >> 7) & 0xFF; // Load 8 bits of Lat into the payload
+	_txPayloadBytes[9] = (Lat_32 << 1) & 0xFE; // Load 7 bits of Lat into the payload
 
 	negative = false;
 	if (Lon < 0.0)
@@ -2986,27 +2961,15 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	}
 	Lon *= 10000.0; // Shift by 4 decimal places
 	uint32_t Lon_32 = (uint32_t)Lon; // Convert to uint32_t
-	if (negative) Lon_32 |= 0x200000; // Set the MS bit if Lon was negative (note: this is not two's complement)
-	//if (negative) _txPayloadBytes[9] |= 0x01; // Set the MS bit if Lon was negative (note: this is not two's complement)
-	// _txPayloadBytes[10] |= (Lon_32 >> 15) & 0x7F; // OR 7 bits of Lon into the payload
-	// _txPayloadBytes[11] = (Lon_32 >> 13) & 0x03; // Six tail bits plus 2 bits of Lon
-	// _txPayloadBytes[12] = (Lon_32 >> 5) & 0xFF; // Load 8 bits of Lon into the payload
-	// _txPayloadBytes[13] = (Lon_32 << 3) & 0xF8; // Load 5 bits of Lon into the payload, pad with three stuff bits
-	// _txPayloadBytes[14] = 0x00; // Eight stuff bits
-	// _txPayloadBytes[15] = 0x00; // Two stuff bits plus six tail bits
-	// _txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-	// _txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-	// _txPayloadBytes[10] = (Lon_32 >> 15) & 0xFC; // Load 6 bits of Lon into the payload plus two tail bits
-	// _txPayloadBytes[11] = (Lon_32 >> 11) & 0x0F; // Four tail bits plus 4 bits of Lon
-	// _txPayloadBytes[12] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
-	// _txPayloadBytes[13] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
-	// _txPayloadBytes[14] = 0x00; // Eight stuff bits
-	// _txPayloadBytes[15] = 0x00; // Six tail bits plus two stuff bits
-	// _txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-	// _txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
-	_txPayloadBytes[9] |= (Lon_32 >> 15) & 0x7F; // Load 7 bits of Lon into the payload
-	_txPayloadBytes[10] = (Lon_32 >> 7) & 0xFF; // Load 8 bits of Lon into the payload
-	_txPayloadBytes[11] = (Lon_32 << 1) & 0xFE; // 7 bits of Lon plus 1 stuff bit
+	if (negative) _txPayloadBytes[9] |= 0x01; // Set the MS bit if Lon was negative (note: this is not two's complement)
+	_txPayloadBytes[10] = (Lon_32 >> 15) & 0xFC; // Load 6 bits of Lon into the payload plus two tail bits
+	_txPayloadBytes[11] = (Lon_32 >> 11) & 0x0F; // Four tail bits plus 4 bits of Lon
+	_txPayloadBytes[12] = (Lon_32 >> 3) & 0xFF; // Load 8 bits of Lon into the payload
+	_txPayloadBytes[13] = (Lon_32 << 5) & 0xE0; // Load 3 bits of Lon into the payload, pad with five stuff bits
+	_txPayloadBytes[14] = 0x00; // Eight stuff bits
+	_txPayloadBytes[15] = 0x00; // Six tail bits plus two stuff bits
+	_txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 	if (_printDebug == true)
 	{
 		_debugPort->print(F("setPayloadARGOS4VLDLatLon: left-justified payload is 0x"));
