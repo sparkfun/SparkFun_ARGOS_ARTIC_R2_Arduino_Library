@@ -64,7 +64,9 @@
 */
 
 // CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
-// E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
+// E.g.: if your Platform ID is 01:23:45:67 then set PLATFORM_ID to 0x01234567
+// (This is the example used in A4-SS-TER-SP-0079-CNES)
+// (The complete over-air data stream, including sync pattern and length, should be: 0xAC53531C651CECA2F followed by 0b011)
 const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
@@ -213,6 +215,20 @@ void loop()
       Serial.print(F("The ARGOS 4 TX Frequency is "));
       Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
+
+      // Set the TCXO warm-up time
+      if (myARTIC.setTCXOWarmupTime(tcxoWarmupTime) == false)
+      {
+        Serial.println("setTCXOWarmupTime failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
+      // Print the TCXO warm-up time
+      uint32_t warmupTime = myARTIC.readTCXOWarmupTime();
+      Serial.print(F("The TCXO Warmup Time is "));
+      Serial.print(warmupTime);
+      Serial.println(F(" seconds."));
 
       // Configure the Tx payload for ARGOS A4 VLD Short using our platform ID and 0 bits of user data
       if (myARTIC.setPayloadARGOS4VLDshort(PLATFORM_ID) == false)

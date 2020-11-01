@@ -222,6 +222,20 @@ void loop()
       Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
 
+      // Set the TCXO warm-up time
+      if (myARTIC.setTCXOWarmupTime(tcxoWarmupTime) == false)
+      {
+        Serial.println("setTCXOWarmupTime failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
+      // Print the TCXO warm-up time
+      uint32_t warmupTime = myARTIC.readTCXOWarmupTime();
+      Serial.print(F("The TCXO Warmup Time is "));
+      Serial.print(warmupTime);
+      Serial.println(F(" seconds."));
+
       loop_step = wait_for_GPS; // Move on
     }
     break;

@@ -571,6 +571,7 @@ public:
 	boolean setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS4VLDshort(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 4 VLD message containing GPS lat & lon in a compact form which ARGOS Web understands
+	boolean setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1, uint32_t payload2); // Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
 
 	// Storage for message transmission
 	// This storage is used by the setPayloadARGOS functions

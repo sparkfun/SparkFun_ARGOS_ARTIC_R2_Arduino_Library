@@ -2984,6 +2984,49 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	return setTxPayload();
 }
 
+// Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1, uint32_t payload2)
+{
+	// Tx length in bits
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = 0x00;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
+
+	// The payload itself
+	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+
+	_txPayloadBytes[7] = (payload1 >> 22) & 0x3F; // Two tail bits plus 6 bits of payload1
+	_txPayloadBytes[8] = (payload1 >> 14) & 0xFF; // Load 8 bits of payload1 into the payload
+	_txPayloadBytes[9] = (payload1 >> 6) & 0xFF; // Load 8 bits of payload1 into the payload
+	_txPayloadBytes[10] = (payload1 << 2) & 0xFC; // Load 6 bits of payload1 plus two tail bits
+
+	_txPayloadBytes[11] = (payload2 >> 24) & 0x0F; // Four tail bits plus 4 bits of payload2
+	_txPayloadBytes[12] = (payload2 >> 16) & 0xFF; // Load 8 bits of payload2 into the payload
+	_txPayloadBytes[13] = (payload2 >> 8) & 0xFF; // Load 8 bits of payload2 into the payload
+	_txPayloadBytes[14] = payload2 & 0xFF; // Load 8 bits of payload2
+	_txPayloadBytes[15] = 0x00; // Six tail bits plus two stuff bits
+
+	_txPayloadBytes[16] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	_txPayloadBytes[17] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS4VLDLong: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < 12; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
 // Set the Tx payload by copying _txPayloadBytes into X memory
 // Returns true if the payload was copied successfully
 // NOTE: The ARTIC datasheet indicates that TX Payload is write-only. So, strictly,
