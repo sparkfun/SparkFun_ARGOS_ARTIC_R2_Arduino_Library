@@ -2,11 +2,16 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: October 21st 2020
+  Date: November 12th 2020
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
   https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
+
+  Feel like supporting our work? Buy a board from SparkFun!
+  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/15136
+  https://www.sparkfun.com/products/15210
 
   This example:
     begins the u-blox module;
@@ -34,7 +39,7 @@
   Please log in to ARGOS Web https://argos-system.cls.fr/argos-cwi2/login.html
   and copy and paste the latest Satellite AOP (Adapted Orbit Parameters)
   into AOP below.
-
+  
   From KINEIS-MU-2019-0094:
   Even though most of the satellites are maintained on their orbit thanks to maneuver capability (propulsion), they still drift with time
   because of the solar activity. The linear time margin parameter compensates for the drift by adding extra time to the computed satellite
@@ -47,9 +52,6 @@
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
-  Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
-
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
   Hardware Connections:
@@ -57,12 +59,12 @@
   https://www.sparkfun.com/products/15574
   CS_Pin = A5 (D24)
   GAIN8_Pin = D3
-  GAIN16_Pin = D4
-  BOOT_Pin = D5
-  INT1_Pin = D6
-  INT2_Pin = D7
-  RESET_Pin = D8
-  PWR_EN_Pin = D9
+  BOOT_Pin = D4
+  INT1_Pin = D5
+  INT2_Pin = D6
+  RESET_Pin = D7
+  ARTIC_PWR_EN_Pin = D8
+  RF_PWR_EN_Pin = D9
   (SPI COPI = D11)
   (SPI CIPO = D12)
   (SPI SCK = D13)
@@ -70,7 +72,7 @@
 
 // CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
 // E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
-const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
+const uint32_t PLATFORM_ID = 0x01234567; // Update this with your Platform ID
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
@@ -100,14 +102,15 @@ ARTIC_R2 myARTIC;
 SFE_UBLOX_GPS myGPS;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
+// (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3;
-int GAIN16_Pin = 4;
-int BOOT_Pin = 5;
-int INT1_Pin = 6;
-int INT2_Pin = 7;
-int RESET_Pin = 8;
-int PWR_EN_Pin = 9;
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int BOOT_Pin = 4;
+int INT1_Pin = 5;
+int INT2_Pin = 6;
+int RESET_Pin = 7;
+int ARTIC_PWR_EN_Pin = 8;
+int RF_PWR_EN_Pin = 9;
 
 // Loop Steps - these are used by the switch/case in the main loop
 // This structure makes it easy to jump between any of the steps
@@ -157,15 +160,11 @@ void setup()
   // Uncomment the next line to enable the helpful debug messages
   //myARTIC.enableDebugging(); // Enable debug messages to Serial
 
-  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
-  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
-  //myARTIC.invertPWNENpin();
-
   Serial.println(F("Starting the ARTIC R2..."));
   Serial.println();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
-  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
+  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
   {
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)
@@ -189,7 +188,7 @@ void loop()
         while (1)
           ; // Do nothing more
       }
-
+    
       // Set the TX mode to ARGOS 4 VLD
       ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE);
       myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -199,12 +198,12 @@ void loop()
         while (1)
           ; // Do nothing more
       }
-
+    
       // Read and print the ARGOS configuration
       ARGOS_Configuration_Register configuration;
       myARTIC.readARGOSconfiguration(&configuration);
       myARTIC.printARGOSconfiguration(configuration);
-
+    
       // Set the ARGOS 4 TX frequency to 401.630 MHz
       // From A4-SS-TER-SP-0079-CNES:
       // The transmission frequency for PTT-VLD-A4 platforms shall be set between 399.91 MHz to 401.68 MHz.
@@ -221,7 +220,7 @@ void loop()
       Serial.print(F("The ARGOS 4 TX Frequency is "));
       Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
-
+      
       // Set the TCXO warm-up time
       if (myARTIC.setTCXOWarmupTime(tcxoWarmupTime) == false)
       {
@@ -239,13 +238,13 @@ void loop()
       loop_step = wait_for_GPS; // Move on
     }
     break;
-
+    
     // ************************************************************************************************
     // Wait for the GPS time to be valid and for the position fix to be 3D
     case wait_for_GPS:
     {
       delay(250); // Let's not pound the u-blox too hard...
-
+      
       // Read the GPS. Check that the time is valid. It should be by now as we have waited for the ARTIC to start!
       boolean timeValid = myGPS.getTimeValid();
       timeValid = myGPS.getTimeValid(); // Call getTimeValid twice to ensure we have fresh data
@@ -270,7 +269,7 @@ void loop()
       }
     }
     break;
-
+      
     // ************************************************************************************************
     // Read the AOP
     // Read the time, latitude and longitude from GPS
@@ -367,24 +366,24 @@ void loop()
         Serial.println(F(" UTC"));
 
         firstTransmit = true; // Set the firstTransmit flag
-
+  
         loop_step = wait_for_next_pass; // Move on
       }
       else
       {
         Serial.println(F("The transmission window was missed. Recalculating..."));
         Serial.println();
-        // Leave loop_step unchanged so the next pass is recalculated
+        // Leave loop_step unchanged so the next pass is recalculated      
       }
     }
     break;
-
+      
     // ************************************************************************************************
     // Wait until the next satellite pass
     case wait_for_next_pass:
     {
       delay(250); // Let's not pound the u-blox too hard...
-
+      
       // Read the GPS time
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
@@ -392,8 +391,8 @@ void loop()
       int32_t secsRemaining = (int32_t)nextTransmitTime - (int32_t)epochNow;
 
       // Count down in intervals of 100, then 10, then 1 second
-      if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) ||
-        ((secsRemaining < 100) && (secsRemaining % 10 == 0)) ||
+      if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) || 
+        ((secsRemaining < 100) && (secsRemaining % 10 == 0)) || 
         (secsRemaining < 10))
       {
         Serial.print(F("Transmit will take place in "));
@@ -421,7 +420,7 @@ void loop()
       }
     }
     break;
-
+      
     // ************************************************************************************************
     // Start the ARTIC in Transmit One Package And Go Idle mode
     case ARTIC_TX:
@@ -433,14 +432,14 @@ void loop()
         lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
         lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
         lon_tx = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
-
+  
         // Print the lat and lon
         Serial.print(F("GPS Latitude is: "));
         Serial.println(lat_tx, 4);
         Serial.print(F("GPS Longitude is: "));
         Serial.println(lon_tx, 4);
         Serial.println();
-
+  
         // Configure the Tx payload for ARGOS 4 VLD using our platform ID and the latest lat/lon
         if (myARTIC.setPayloadARGOS4VLDLatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
         {
@@ -454,7 +453,7 @@ void loop()
           while (1)
             ; // Do nothing more
         }
-
+      
 /*
         // Read the payload back again and print it
         myARTIC.readTxPayload();
@@ -487,40 +486,40 @@ void loop()
       loop_step = wait_for_ARTIC_TX; // Move on
     }
     break;
-
+    
     // ************************************************************************************************
     // Start the ARTIC in Transmit One Package And Go Idle mode
     case wait_for_ARTIC_TX:
     {
       delay(1000); // Check the status every second
-
+      
       // Read and print the ARTIC R2 status register
       ARTIC_R2_Firmware_Status status;
       myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
       Serial.println(F("ARTIC R2 Firmware Status:"));
       myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-
+    
       if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when TX is finished
       {
         Serial.println(F("INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!"));
       }
-
+    
       if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
       {
         Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened...)"));
       }
-
+    
       Serial.println();
-
+    
       // Read and print the instruction progress
       ARTIC_R2_MCU_Instruction_Progress progress;
       // checkMCUinstructionProgress will return true if the instruction is complete
       boolean instructionComplete = myARTIC.checkMCUinstructionProgress(&progress); // Check the instruction progress
       Serial.println(F("ARTIC R2 instruction progress:"));
       myARTIC.printInstructionProgress(progress); // Pretty-print the progress to Serial
-
+    
       Serial.println();
-
+    
       if (instructionComplete)
       {
         Serial.println(F("Transmission is complete!"));
@@ -528,14 +527,14 @@ void loop()
 
         Serial.println(F("Clearing INT1."));
         Serial.println();
-
+      
         // Clear INT1
         if (myARTIC.clearInterrupts(1) == false)
         {
           Serial.println("clearInterrupts failed! Freezing...");
           while (1)
             ; // Do nothing more
-        }
+        }        
 
         remainingTransmits--; // Decrement the remaining number of satellite transmits
         if (remainingTransmits > 0) // Are we done?

@@ -26,7 +26,7 @@
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h"
 
-boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_PWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, int user_GAIN16Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
+boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
 {
 	if (_printDebug == true)
 		_debugPort->println(F("begin: ARTIC is starting..."));
@@ -46,16 +46,19 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	_cs = user_CSPin;
 	_boot = user_BOOTPin;
 	_rst = user_RSTPin;
-	_pwr_en = user_PWRENPin;
+	_artic_pwr_en = user_ARTICPWRENPin;
+	_rf_pwr_en = user_RFPWRENPin;
 	_int1 = user_INT1Pin;
 	_int2 = user_INT2Pin;
 
-	// Optional pins
+	// Optional pin
 	_gain8 = user_GAIN8Pin;
-	_gain16 = user_GAIN16Pin;
 
-	pinMode(_pwr_en, OUTPUT);
-	disableARTICpower(); // Disable the power until we have configured the rest of the IO pins
+	// Disable the power until we have configured the rest of the IO pins
+	pinMode(_artic_pwr_en, OUTPUT);
+	disableARTICpower();
+	pinMode(_rf_pwr_en, OUTPUT);
+	disableRFpower();
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
@@ -75,11 +78,10 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	pinMode(_int1, INPUT_PULLUP);
 	pinMode(_int2, INPUT_PULLUP);
 
-	if ((_gain8 >= 0) && (_gain16 >= 0)) // Set the RF TX gain if both pins are defined
+	if (_gain8 >= 0) // Set the RF TX gain the pin is defined
 	{
 		pinMode(_gain8, OUTPUT);
-		pinMode(_gain16, OUTPUT);
-		setTXgain(0); // Set the TX gain to minimum while we turn the power on, to reduce the current surge
+		attenuateTXgain(true); // Set the TX gain to minimum while we turn the power on, to reduce the current surge
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
@@ -89,12 +91,13 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_POWER_ON_DELAY_MS
 
-	// Now ramp up the TX gain to 24, if the _gain8 and _gain16 pins are defined, to reduce the current surge
-	if ((_gain8 >= 0) && (_gain16 >= 0))
+	enableRFpower(); // Enable power for the RF amplifier
+	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+
+	// Now ramp up the TX gain, if the _gain8 pin is defined, to reduce the current surge
+	if (_gain8 >= 0)
 	{
-		setTXgain(16);
-		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-		setTXgain(24);
+		attenuateTXgain(false);
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
@@ -607,50 +610,29 @@ void ARTIC_R2::enableDebugging(Stream &debugPort)
 }
 
 //Set the RF TX gain
-//Returns true if the gain pins have been defined and if the gain value is valid
-boolean ARTIC_R2::setTXgain(int gain)
+//Returns true if the gain pin has been defined
+boolean ARTIC_R2::attenuateTXgain(boolean attenuate)
 {
-	if ((_gain8 >= 0) && (_gain16 >= 0))
+	if (_gain8 >= 0)
 	{
-		if (gain == 0)
+		if (attenuate == true)
 		{
-			digitalWrite(_gain8, HIGH);
-			digitalWrite(_gain16, HIGH);
+			digitalWrite(_gain8, HIGH); // The opto-isolator inverts the signal
 			if (_printDebug == true)
-				_debugPort->println(F("setTXgain: gain set to 0"));
-			return (true);
-		}
-		else if (gain == 8)
-		{
-			digitalWrite(_gain8, LOW);
-			digitalWrite(_gain16, HIGH);
-			if (_printDebug == true)
-				_debugPort->println(F("setTXgain: gain set to 8"));
-			return (true);
-		}
-		else if (gain == 16)
-		{
-			digitalWrite(_gain8, HIGH);
-			digitalWrite(_gain16, LOW);
-			if (_printDebug == true)
-				_debugPort->println(F("setTXgain: gain set to 16"));
-			return (true);
-		}
-		else if (gain == 24)
-		{
-			digitalWrite(_gain8, LOW);
-			digitalWrite(_gain16, LOW);
-			if (_printDebug == true)
-				_debugPort->println(F("setTXgain: gain set to 24"));
-			return (true);
+				_debugPort->println(F("attenuateTXgain: attenuation enabled. Gain reduced by 8dB"));
 		}
 		else
-			return (false);
+		{
+			digitalWrite(_gain8, LOW);
+			if (_printDebug == true)
+				_debugPort->println(F("attenuateTXgain: attenuation disabled"));
+		}
+		return (true);
 	}
 	else
 	{
 		if (_printDebug == true)
-			_debugPort->println(F("setTXgain: _gain8 and _gain16 pins are not defined! Unable to set the TX gain!"));
+			_debugPort->println(F("attenuateTXgain: _gain8 pin is not defined! Unable to attenuate the gain!"));
 		return (false);
 	}
 }
@@ -658,19 +640,25 @@ boolean ARTIC_R2::setTXgain(int gain)
 // Enable power for the ARTIC R2
 void ARTIC_R2::enableARTICpower()
 {
-	if (_invertedPWREN == false) // Default: SparkFun ARTIC R2 Breakout
-		digitalWrite(_pwr_en, LOW);
-	else
-		digitalWrite(_pwr_en, HIGH); // Arribada Horizon
+	digitalWrite(_artic_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout and Arribada Horizon
 }
 
 // Disable power for the ARTIC R2
 void ARTIC_R2::disableARTICpower()
 {
-	if (_invertedPWREN == false) // Default: SparkFun ARTIC R2 Breakout
-		digitalWrite(_pwr_en, HIGH);
-	else
-		digitalWrite(_pwr_en, LOW); // Arribada Horizon
+	digitalWrite(_artic_pwr_en, LOW); // SparkFun ARTIC R2 Breakout and Arribada Horizon
+}
+
+// Enable power for the RF amplifier
+void ARTIC_R2::enableRFpower()
+{
+	digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout
+}
+
+// Disable power for the RF amplifier
+void ARTIC_R2::disableRFpower()
+{
+	digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Breakout
 }
 
 // Read ARTIC R2 firmware status register
@@ -3295,13 +3283,6 @@ boolean ARTIC_R2::clearInterrupts(uint8_t interrupts)
 	}
 
 	return (true); // Success!
-}
-
-// Calling invertPWNENpin() or invertPWNENpin(true) will invert the PWR_EN pin for the Arribada Horizon
-// Call invertPWNENpin(false) to change it back to the default for the SparkFun ARTIC R2 Breakout
-void ARTIC_R2::invertPWNENpin(boolean invert)
-{
-	_invertedPWREN = invert;
 }
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=

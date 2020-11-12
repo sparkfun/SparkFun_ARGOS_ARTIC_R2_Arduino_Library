@@ -2,7 +2,7 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: September 29th 2020
+  Date: November 12th 2020
 
   This example:
     begins (initializes) the ARTIC;
@@ -30,12 +30,12 @@
   https://www.sparkfun.com/products/15574
   CS_Pin = A5 (D24)
   GAIN8_Pin = D3
-  GAIN16_Pin = D4
-  BOOT_Pin = D5
-  INT1_Pin = D6
-  INT2_Pin = D7
-  RESET_Pin = D8
-  PWR_EN_Pin = D9
+  BOOT_Pin = D4
+  INT1_Pin = D5
+  INT2_Pin = D6
+  RESET_Pin = D7
+  ARTIC_PWR_EN_Pin = D8
+  RF_PWR_EN_Pin = D9
   (SPI COPI = D11)
   (SPI CIPO = D12)
   (SPI SCK = D13)
@@ -51,14 +51,15 @@ const uint32_t PLATFORM_ID = 0x00000000; // Update this with your Platform ID
 ARTIC_R2 myARTIC;
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
+// (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3;
-int GAIN16_Pin = 4;
-int BOOT_Pin = 5;
-int INT1_Pin = 6;
-int INT2_Pin = 7;
-int RESET_Pin = 8;
-int PWR_EN_Pin = 9;
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int BOOT_Pin = 4;
+int INT1_Pin = 5;
+int INT2_Pin = 6;
+int RESET_Pin = 7;
+int ARTIC_PWR_EN_Pin = 8;
+int RF_PWR_EN_Pin = 9;
 
 void setup()
 {
@@ -74,12 +75,8 @@ void setup()
 
   //myARTIC.enableDebugging(); // Enable debug messages to Serial
 
-  // Uncomment the next line to invert the PWR_EN pin if you are using the Arribada Horizon instead of the SparkFun ARTIC R2 Breakout
-  // (Make sure you call .invertPWNENpin _before_ you call .begin !)
-  //myARTIC.invertPWNENpin();
-
   // Begin the ARTIC: enable power and upload firmware or boot from flash
-  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin, GAIN16_Pin) == false)
+  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
   {
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)

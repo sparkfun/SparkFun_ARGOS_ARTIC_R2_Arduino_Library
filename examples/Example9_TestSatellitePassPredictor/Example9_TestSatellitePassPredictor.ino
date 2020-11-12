@@ -2,7 +2,7 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: September 29th 2020
+  Date: November 12th 2020
 
   This example tests the satellite pass predictor.
   The predictor was originally written by CLS.

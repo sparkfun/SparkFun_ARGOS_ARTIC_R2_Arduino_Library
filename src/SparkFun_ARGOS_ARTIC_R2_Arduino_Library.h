@@ -501,14 +501,16 @@ class ARTIC_R2
 {
 public:
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
-	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_PWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, int user_GAIN16Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
+	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
-	boolean setTXgain(int gain = 24); // Set the TX gain (valid values are 0,8,16,24)
+	boolean attenuateTXgain(boolean attenuate = false); // Attenuate the TX gain by 8dB
 
-	void enableARTICpower(); // Enable power for the ARTIC R2 by pulling the power enable pin low
-	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin high
+	void enableARTICpower(); // Enable power for the ARTIC R2 by pulling the power enable pin high
+	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin low
+	void enableRFpower(); // Enable power for the RF amplifier by pulling the power enable pin high
+	void disableRFpower(); // Disable power for the RF amplifier by pulling the power enable pin low
 
 	void readStatusRegister(ARTIC_R2_Firmware_Status *status); // Read the ARTIC R2 status register
 
@@ -594,9 +596,6 @@ public:
 	void readTxPayload();
 	void printTxPayload(Stream &port = Serial); // Pretty-print the Tx payload
 
-	// Call invertPWNENpin to invert the PWR_EN pin for the Arribada Horizon
-	void invertPWNENpin(boolean invert = true);
-
 	// Arribada / CLS Satellite Pass Predictor
 	uint32_t predictNextSatellitePass(bulletin_data_t *bulletin, float min_elevation, const uint8_t number_sat, float lon, float lat, long current_time, int max_npass = 1);
 
@@ -617,11 +616,11 @@ private:
 	int _cs; // ARTIC R2 SPI Chip Select
 	int _rst; // ARTIC R2 Reset pin
 	int _boot; // ARTIC R2 Boot pin
-	int _pwr_en; // Pull this pin low to enable power for the ARTIC R2
+	int _artic_pwr_en; // Pull this pin high to enable power for the ARTIC R2
+	int _rf_pwr_en; // Pull this pin high to enable power for the RF amplifier
 	int _int1; // ARTIC R2 Interrupt 1 pin
 	int _int2; // ARTIC R2 Interrupt 2 pin
-	int _gain8 = -1; // Pull this pin high to _disable_ the x8 RF gain
-	int _gain16 = -1; // Pull this pin high to _disable_ the x16 RF gain
+	int _gain8 = -1; // Pull this pin high to attenuate the gain by 8dB
 
 	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
 	// This allows some time for the internal memory access block to retrieve the first data sample.
@@ -632,10 +631,6 @@ private:
 	// instructionInProgress will be ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS when the ARTIC is idle.
 	// It will be set to one of the INST_ states by sendMCUinstruction.
 	uint8_t _instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS;
-
-	// SparkFun ARTIC R2 Breakout: pull PWR_EN low to enable power
-	// Arribada Horizon: pull PWR_EN high to enable power
-	boolean _invertedPWREN = false; // If true, PWR_EN will be inverted for the Arribada Horizon
 
 	//Functions
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
