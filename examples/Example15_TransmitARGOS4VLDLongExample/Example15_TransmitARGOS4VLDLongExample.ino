@@ -45,7 +45,9 @@
 // The complete over-air data stream, including sync pattern and length, should be: 0xAC5353DC651CECA2F6E328E76517B719473B28BD followed by 0b1
 const uint32_t PLATFORM_ID = 0x01234567;
 
-const uint32_t tcxoWarmupTime = 10; // Start the transmit this many seconds early to compensate for the TCXO warmup time
+const unsigned long repetitionPeriod = 50000; // Define the repetition period in milliseconds
+
+const uint32_t tcxoWarmupTime = 10; // Define the TCXO warmup time
 
 #include <SPI.h>
 
@@ -71,6 +73,8 @@ enum {
   wait_for_ARTIC_TX,   // Wait for the ARTIC to transmit
 } loop_steps;
 int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
+
+unsigned long lastTransmit = 0; // Keep a record of the last transmit
 
 void setup()
 {
@@ -173,6 +177,20 @@ void loop()
         myARTIC.printTxPayload();
         Serial.println();
 */
+
+      // Wait for the next repetition period
+      while ((lastTransmit + repetitionPeriod) > millis())
+      {
+        if ((millis() % 1000) < 50) // Print how long it is until the next transmit
+        {
+          Serial.print(F("The next transmit will take place in "));
+          unsigned long remaining = ((lastTransmit + repetitionPeriod) - millis()) / 1000;
+          Serial.print(remaining);
+          Serial.println(F(" seconds"));
+        }
+        delay(50);
+      }
+      lastTransmit = millis(); // Update lastTransmit
 
       // Tell the ARTIC to do its thing!
       ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);
