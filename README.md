@@ -22,17 +22,17 @@ Library written by Paul Clark ([SparkFun](http://www.sparkfun.com)).
 Repository Contents
 -------------------
 
-* **/examples** - Example sketches for the library (.ino). Run these from the Arduino IDE.
-* **/src** - Source files for the library (.cpp, .h).
-* **keywords.txt** - Keywords from this library that will be highlighted in the Arduino IDE.
-* **library.properties** - General library properties for the Arduino package manager.
-* **[CONTRIBUTING.md](./CONTRIBUTING.md)** - Guidance on how to contribute to this library.
+* [**/examples**](./examples) - Example sketches for the library (.ino). Run these from the Arduino IDE.
+* [**/src**](./src) - Source files for the library (.cpp, .h).
+* [**keywords.txt**](./keywords.txt) - Keywords from this library that will be highlighted in the Arduino IDE.
+* [**library.properties**](./library_properties) - General library properties for the Arduino package manager.
+* [**CONTRIBUTING.md**](./CONTRIBUTING.md) - Guidance on how to contribute to this library.
 
 Documentation
 --------------
 
 * **[Installing an Arduino Library Guide](https://learn.sparkfun.com/tutorials/installing-an-arduino-library)** - Basic information on how to install an Arduino library.
-* **[Product Repository]()** - Main repository (including hardware files)
+* **[Product Repository](https://github.com/sparkfunX/ARTIC_R2_Breakout)** - Main repository (including hardware files)
 
 License Information
 -------------------
