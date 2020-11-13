@@ -39,7 +39,7 @@
   Please log in to ARGOS Web https://argos-system.cls.fr/argos-cwi2/login.html
   and copy and paste the latest Satellite AOP (Adapted Orbit Parameters)
   into AOP below.
-  
+
   From KINEIS-MU-2019-0094:
   Even though most of the satellites are maintained on their orbit thanks to maneuver capability (propulsion), they still drift with time
   because of the solar activity. The linear time margin parameter compensates for the drift by adding extra time to the computed satellite
@@ -83,7 +83,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
+const char AOP[] =      " A1 6 0 0 1 2020 11 12 22  8 25  6891.645  97.4589  114.264  -23.755   95.0184  -2.38 MA A 5 3 0 2020 11 12 22 39  6  7195.610  98.5050  327.217  -25.341  101.3601   0.00 MB 9 3 0 0 2020 11 12 22 12 22  7195.608  98.7139  349.454  -25.340  101.3595   0.00 MC B 7 3 0 2020 11 12 23  6 13  7195.726  98.7206  336.328  -25.340  101.3619   0.00 15 5 0 0 0 2020 11 12 21 45 44  7180.402  98.7057  323.207  -25.259  101.0389  -0.78 18 8 0 0 0 2020 11 12 21 56 28  7225.954  99.0271  353.993  -25.498  101.9995  -0.87 19 C 6 0 0 2020 11 12 22 17 42  7226.390  99.1936  300.217  -25.499  102.0083  -0.46 SR D 4 3 0 2020 11 12 22 22 32  7160.134  98.5397  113.108  -25.153  100.6125  -0.21";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -187,7 +187,7 @@ void loop()
         while (1)
           ; // Do nothing more
       }
-    
+
       // Set the TX mode to ARGOS PTT-A2
       ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_A2_TX_MODE);
       myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -197,12 +197,12 @@ void loop()
         while (1)
           ; // Do nothing more
       }
-    
+
       // Read and print the ARGOS configuration
       ARGOS_Configuration_Register configuration;
       myARTIC.readARGOSconfiguration(&configuration);
       myARTIC.printARGOSconfiguration(configuration);
-    
+
       // Set the ARGOS 2/3 TX frequency to 401.630 MHz
       // From AS3-SP-516-2098-CNES:
       // The transmission frequency for PTT/PMT-A2 platforms shall be set between 399.91 MHz to 401.68 MHz.
@@ -219,17 +219,17 @@ void loop()
       Serial.print(F("The ARGOS 2/3 TX Frequency is "));
       Serial.print(tx23freq, 3);
       Serial.println(F(" MHz."));
-      
+
       loop_step = wait_for_GPS; // Move on
     }
     break;
-    
+
     // ************************************************************************************************
     // Wait for the GPS time to be valid and for the position fix to be 3D
     case wait_for_GPS:
     {
       delay(250); // Let's not pound the u-blox too hard...
-      
+
       // Read the GPS. Check that the time is valid. It should be by now as we have waited for the ARTIC to start!
       boolean timeValid = myGPS.getTimeValid();
       timeValid = myGPS.getTimeValid(); // Call getTimeValid twice to ensure we have fresh data
@@ -254,7 +254,7 @@ void loop()
       }
     }
     break;
-      
+
     // ************************************************************************************************
     // Read the AOP
     // Read the time, latitude and longitude from GPS
@@ -338,24 +338,24 @@ void loop()
         Serial.println(F(" UTC"));
 
         firstTransmit = true; // Set the firstTransmit flag
-  
+
         loop_step = wait_for_next_pass; // Move on
       }
       else
       {
         Serial.println(F("The transmission window was missed. Recalculating..."));
         Serial.println();
-        // Leave loop_step unchanged so the next pass is recalculated      
+        // Leave loop_step unchanged so the next pass is recalculated
       }
     }
     break;
-      
+
     // ************************************************************************************************
     // Wait until the next satellite pass
     case wait_for_next_pass:
     {
       delay(250); // Let's not pound the u-blox too hard...
-      
+
       // Read the GPS time
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
@@ -363,8 +363,8 @@ void loop()
       int32_t secsRemaining = (int32_t)nextTransmitTime - (int32_t)epochNow;
 
       // Count down in intervals of 100, then 10, then 1 second
-      if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) || 
-        ((secsRemaining < 100) && (secsRemaining % 10 == 0)) || 
+      if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) ||
+        ((secsRemaining < 100) && (secsRemaining % 10 == 0)) ||
         (secsRemaining < 10))
       {
         Serial.print(F("Transmit will take place in "));
@@ -392,7 +392,7 @@ void loop()
       }
     }
     break;
-      
+
     // ************************************************************************************************
     // Start the ARTIC in Transmit One Package And Go Idle mode
     case ARTIC_TX:
@@ -404,14 +404,14 @@ void loop()
         lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Convert from degrees^-7
         lat_tx = ((float)myGPS.getLatitude()) / 10000000; // Read the lat twice to ensure we have fresh data
         lon_tx = ((float)myGPS.getLongitude()) / 10000000; // Convert from degrees^-7
-  
+
         // Print the lat and lon
         Serial.print(F("GPS Latitude is: "));
         Serial.println(lat_tx, 4);
         Serial.print(F("GPS Longitude is: "));
         Serial.println(lon_tx, 4);
         Serial.println();
-  
+
         // Configure the Tx payload for ARGOS PTT-A2 using our platform ID and the latest lat/lon
         if (myARTIC.setPayloadARGOS2LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
         {
@@ -425,7 +425,7 @@ void loop()
           while (1)
             ; // Do nothing more
         }
-      
+
 /*
         // Read the payload back again and print it
         myARTIC.readTxPayload();
@@ -458,40 +458,40 @@ void loop()
       loop_step = wait_for_ARTIC_TX; // Move on
     }
     break;
-    
+
     // ************************************************************************************************
     // Start the ARTIC in Transmit One Package And Go Idle mode
     case wait_for_ARTIC_TX:
     {
       delay(1000); // Check the status every second
-      
+
       // Read and print the ARTIC R2 status register
       ARTIC_R2_Firmware_Status status;
       myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
       Serial.println(F("ARTIC R2 Firmware Status:"));
       myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
-    
+
       if (status.STATUS_REGISTER_BITS.DSP2MCU_INT1) // Check the interrupt 1 flag. This will go high when TX is finished
       {
         Serial.println(F("INT1 pin is high. TX is finished (or MCU is in IDLE_STATE)!"));
       }
-    
+
       if (status.STATUS_REGISTER_BITS.DSP2MCU_INT2) // Check the interrupt 2 flag. This will go high when if the message was invalid
       {
         Serial.println(F("INT2 pin is high. TX message was invalid! (Something really bad must have happened...)"));
       }
-    
+
       Serial.println();
-    
+
       // Read and print the instruction progress
       ARTIC_R2_MCU_Instruction_Progress progress;
       // checkMCUinstructionProgress will return true if the instruction is complete
       boolean instructionComplete = myARTIC.checkMCUinstructionProgress(&progress); // Check the instruction progress
       Serial.println(F("ARTIC R2 instruction progress:"));
       myARTIC.printInstructionProgress(progress); // Pretty-print the progress to Serial
-    
+
       Serial.println();
-    
+
       if (instructionComplete)
       {
         Serial.println(F("Transmission is complete!"));
@@ -499,14 +499,14 @@ void loop()
 
         Serial.println(F("Clearing INT1."));
         Serial.println();
-      
+
         // Clear INT1
         if (myARTIC.clearInterrupts(1) == false)
         {
           Serial.println("clearInterrupts failed! Freezing...");
           while (1)
             ; // Do nothing more
-        }        
+        }
 
         remainingTransmits--; // Decrement the remaining number of satellite transmits
         if (remainingTransmits > 0) // Are we done?
