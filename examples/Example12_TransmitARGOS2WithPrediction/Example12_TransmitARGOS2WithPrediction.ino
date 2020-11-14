@@ -9,7 +9,7 @@
   https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
   https://www.sparkfun.com/products/15136
   https://www.sparkfun.com/products/15210
 

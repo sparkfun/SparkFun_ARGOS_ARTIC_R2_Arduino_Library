@@ -15,13 +15,15 @@
     keeps checking the MCU status until transmit is complete;
     repeats.
 
+  The transmit power can be reduced by 8dB by uncommenting the line: myARTIC.attenuateTXgain(true);
+
   The messages are ARGOS 4 VLD (Long) and contain the example used in A4-SS-TER-SP-0079-CNES.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
@@ -148,6 +150,9 @@ void loop()
       Serial.print(F("The ARGOS 4 TX Frequency is "));
       Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
+
+      // Uncomment the next line if you want to attenuate the transmit power by 8dB
+      //myARTIC.attenuateTXgain(true);
 
       loop_step = ARTIC_TX; // Move on
     }

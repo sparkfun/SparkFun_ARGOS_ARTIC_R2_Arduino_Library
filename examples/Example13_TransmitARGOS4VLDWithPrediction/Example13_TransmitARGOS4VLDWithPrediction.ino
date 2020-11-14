@@ -9,7 +9,7 @@
   https://github.com/sparkfun/SparkFun_Ublox_Arduino_Library
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
   https://www.sparkfun.com/products/15136
   https://www.sparkfun.com/products/15210
 
@@ -28,6 +28,8 @@
     keeps checking the MCU status until transmit is complete;
     repeats the message transmit numberTransmits times, repetitionPeriod seconds apart;
     repeats for the next satellite pass.
+
+  The transmit power can be reduced by 8dB by uncommenting the line: myARTIC.attenuateTXgain(true);
 
   The messages are ARGOS 4 VLD (Long) and contain the GPS latitude and longitude in a compact form which ARGOS Web will understand.
   Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
@@ -234,6 +236,9 @@ void loop()
       Serial.print(F("The TCXO Warmup Time is "));
       Serial.print(warmupTime);
       Serial.println(F(" seconds."));
+
+      // Uncomment the next line if you want to attenuate the transmit power by 8dB
+      //myARTIC.attenuateTXgain(true);
 
       loop_step = wait_for_GPS; // Move on
     }

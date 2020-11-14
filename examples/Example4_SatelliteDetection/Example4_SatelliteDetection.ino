@@ -16,7 +16,7 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
@@ -79,16 +79,16 @@ void setup()
 
   // Read and print the ARTIC R2 firmware status
   ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
   Serial.println();
-  
+
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
-  
+
   // Set the satellite detection timeout to 600 seconds
   if (myARTIC.setSatelliteDetectionTimeout(600) == false)
   {
@@ -122,7 +122,7 @@ void setup()
   Serial.println(F("ARTIC R2 MCU instruction result:"));
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
   Serial.println();
-  
+
   if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
   {
     Serial.println("MCU Command failed! Freezing...");

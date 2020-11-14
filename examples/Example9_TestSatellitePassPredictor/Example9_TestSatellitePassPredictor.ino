@@ -12,11 +12,11 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
 
   You can download the Satellite AOP (Adapted Orbit Parameters) from https://argos-system.cls.fr/argos-cwi2/login.html
-  
+
   The AOP file contains the following fields separated with spaces :
     Satellite identifier (number for NOAA spacecraft)
     Satellite identifier into the downlink allcast data
@@ -40,11 +40,11 @@
     Semi-major axis drift (m/day)
 
   Example data for METOP-A for October 2nd 2020 is:
-  
+
   MA A 5 3 0 2020 10  1 22  7 29  7195.569  98.5114  336.036  -25.341  101.3592   0.00
 
   The two character satellite identifiers are:
-  
+
   MA : METOP-A
   MB : METOP-B
   MC : METOP-C
@@ -52,7 +52,7 @@
   NN : NOAA-18 (appears as 18 in the AOP)
   NP : NOAA-19 (appears as 19 in the AOP)
   SR : SARAL
-  
+
  */
 
 const uint8_t numARGOSsatellites = 7; // Change this if required to match the number of satellites in the AOP
@@ -86,7 +86,7 @@ void setup()
   // E.g. 2020/10/2 08:00:00 UTC/GMT should be 1601625600
   // https://www.epochconverter.com/
   // https://www.epochconverter.com/programming/c
-  
+
   uint32_t current_time = myARTIC.convertGPSTimeToEpoch(2020, 10, 2, 8, 0, 0);
 
   Serial.print(F("The time of the prediction in seconds since the epoch is "));

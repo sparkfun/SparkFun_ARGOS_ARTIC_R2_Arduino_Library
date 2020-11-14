@@ -20,7 +20,7 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
@@ -87,18 +87,18 @@ void setup()
 
   // Read and print the ARTIC R2 status register
   ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
   Serial.println();
-  
+
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
-  
+
   Serial.println(F("Setting the RX mode to ARGOS 3..."));
-  
+
   // Set the RX mode to ARGOS 3
   ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -136,7 +136,7 @@ void setup()
   Serial.println(F("ARTIC R2 MCU instruction result:"));
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
   Serial.println();
-  
+
   if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
   {
     Serial.println("MCU Command failed! Freezing...");
@@ -179,7 +179,7 @@ void loop()
     Serial.println();
     Serial.println(F("Valid message received! Downloading..."));
     Serial.println();
-    
+
     // Read a downlink message from the RX payload buffer
     Downlink_Message downlinkMessage;
     if (myARTIC.readDownlinkMessage(&downlinkMessage))
@@ -218,10 +218,10 @@ void loop()
     Serial.println();
     Serial.println(F("Time to stop receiving! Sending Go To Idle..."));
     Serial.println();
-    
+
     // Tell the ARTIC to return to idle mode.
     ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_GO_TO_IDLE);
-  
+
     if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
     {
       Serial.println("MCU Command failed!");
@@ -237,7 +237,7 @@ void loop()
       while (1)
         ; // Do nothing more
     }
-    
+
     Serial.println(F("Go To Idle sent."));
     Serial.println();
 
@@ -251,7 +251,7 @@ void loop()
     Serial.println();
     Serial.println(F("Instruction (Go To Idle) is complete! Freezing..."));
     Serial.println();
-    
+
     while (1)
       ; // Do nothing more
   }

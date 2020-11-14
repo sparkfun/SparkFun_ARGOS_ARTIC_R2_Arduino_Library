@@ -19,7 +19,7 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   This example requires a Platform ID. Copy and paste your 28-bit Platform ID into ADDRESS_LS_BITS and ADDRESS_MS_BITS. (See below)
 
@@ -88,18 +88,18 @@ void setup()
 
   // Read and print the ARTIC R2 status register
   ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
   Serial.println();
-  
+
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
 
   Serial.println(F("Setting the RX mode to ARGOS 3..."));
-  
+
   // Set the RX mode to ARGOS 3
   ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -168,14 +168,14 @@ void setup()
   // Start the ARTIC in receiving mode for an unlimited time until 1 message has been received.
   // If the message is received the Artic will go to IDLE. The user can abort the reception using the ‘Go to idle’ command.
   result = myARTIC.sendMCUinstruction(INST_START_RECEIVING_1_MESSAGE);
-  
+
   myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
   Serial.println();
   Serial.println(F("ARTIC R2 MCU instruction result:"));
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
-  
+
   if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
   {
     Serial.println("MCU Command failed! Freezing...");
@@ -215,7 +215,7 @@ void loop()
     Serial.println();
     Serial.println(F("Message reception is complete!"));
     Serial.println();
-    
+
     if (progress == ARTIC_R2_MCU_PROGRESS_RECEIVE_ONE_MESSAGE_RX_VALID_MESSAGE) // If a message was received, read it.
     {
       // Read a downlink message from the RX payload buffer
@@ -240,7 +240,7 @@ void loop()
         Serial.println(F("readDownlinkMessage failed!"));
       }
     }
-    
+
     Serial.println();
     Serial.println(F("We are done. Freezing..."));
     while (1)

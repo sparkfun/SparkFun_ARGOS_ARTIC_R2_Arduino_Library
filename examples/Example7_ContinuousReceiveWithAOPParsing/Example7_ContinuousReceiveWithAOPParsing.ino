@@ -21,7 +21,7 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 
@@ -61,7 +61,7 @@ void setup()
 {
   pinMode(LED_BUILTIN, OUTPUT); // Turn the LED off
   digitalWrite(LED_BUILTIN, LOW);
-  
+
   Serial.begin(115200);
   Serial.println();
   Serial.println(F("ARGOS ARTIC R2 Example"));
@@ -87,18 +87,18 @@ void setup()
 
   // Read the ARTIC R2 status register
   ARTIC_R2_Firmware_Status status;
-  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register  
+  myARTIC.readStatusRegister(&status); // Read the ARTIC R2 status register
   Serial.println(F("ARTIC R2 Firmware Status:"));
   myARTIC.printFirmwareStatus(status); // Pretty-print the firmware status to Serial
   Serial.println();
-  
+
   // Read and print the ARGOS configuration
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
-  
+
   Serial.println(F("Setting the RX mode to ARGOS 3..."));
-  
+
   // Set the RX mode to ARGOS 3
   ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_3_RX_MODE);
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
@@ -136,7 +136,7 @@ void setup()
   Serial.println(F("ARTIC R2 MCU instruction result:"));
   myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
   Serial.println();
-  
+
   if ((result == ARTIC_R2_MCU_COMMAND_REJECTED) || (result == ARTIC_R2_MCU_COMMAND_OVERFLOW))
   {
     Serial.println("MCU Command failed! Freezing...");
@@ -171,7 +171,7 @@ void loop()
     Serial.println();
     Serial.println(F("Valid message received! Downloading..."));
     Serial.println();
-    
+
     // Read a downlink message from the RX payload buffer
     Downlink_Message downlinkMessage;
     if (myARTIC.readDownlinkMessage(&downlinkMessage))
@@ -215,7 +215,7 @@ void loop()
       if ((downlinkMessage.addresseeIdentification == 0x00000BE) && (downlinkMessage.service == 0x00))
       {
         bulletin_data_t bulletin; // Assemble the data as a bulletin_data_t which could then be used for satellite pass prediction (see the later examples)
-        
+
         Serial.print(F("Satellite orbit parameters received: Satellite ID="));
         switch (downlinkMessage.payload[0] >> 4)
         {
@@ -282,7 +282,7 @@ void loop()
             bulletin.sat[0] = '?'; bulletin.sat[1] = '?';
             break;
         }
-        
+
         // Extract the date and time of the bulletin
         uint16_t year = 2000;
         year += (((downlinkMessage.payload[0] & 0x03) << 2) | (downlinkMessage.payload[1] >> 6)) * 10;
@@ -340,7 +340,7 @@ void loop()
         uint32_t smad = ((uint32_t)(downlinkMessage.payload[14]));
         float smad_f = 0 - (((float)smad) / 10); // Defined in AS3-SP-516-2095-CNES
         bulletin.params[5] = smad_f; // Store it
-        
+
         // Extract the 16-bit orbit inclination (deg)
         // Inclination : angle between the plane of the satellite orbit and the earth's equatorial plane
         uint32_t oi = (((uint32_t)(downlinkMessage.payload[15])) << 8);
@@ -364,6 +364,6 @@ void loop()
     if (myARTIC.clearInterrupts(1) == false)
     {
       Serial.println("clearInterrupts may have failed!");
-    }  
+    }
   }
 }

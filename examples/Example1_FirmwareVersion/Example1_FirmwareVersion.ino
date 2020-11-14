@@ -15,7 +15,7 @@
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
   Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/
+  https://www.sparkfun.com/products/17236
 
   The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
 

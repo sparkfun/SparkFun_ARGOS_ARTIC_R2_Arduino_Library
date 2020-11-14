@@ -3,7 +3,7 @@ SparkFun ARGOS ARTIC R2 Arduino Library
 
 ![SparkX ARTIC R2 Breakout]()
 
-[*SparkX ARTIC R2 Breakout*]()
+[*SparkX ARTIC R2 Breakout*](https://www.sparkfun.com/products/17236)
 
 The ARTIC R2 chipset allows you to send and receive short data messages to and from anywhere via the ARGOS satellite network. Dedicated to programs which are related to environmental protection,
 awareness or study, or to protecting human life, the ARGOS constellation provides full global coverage including the polar regions.
