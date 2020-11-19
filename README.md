@@ -1,7 +1,7 @@
 SparkFun ARGOS ARTIC R2 Arduino Library
 ===========================================================
 
-![SparkX ARTIC R2 Breakout]()
+[![SparkX ARTIC R2 Breakout](./img/17236-Artic_R2_Breakout-01.jpg)](https://www.sparkfun.com/products/17236)
 
 [*SparkX ARTIC R2 Breakout*](https://www.sparkfun.com/products/17236)
 
