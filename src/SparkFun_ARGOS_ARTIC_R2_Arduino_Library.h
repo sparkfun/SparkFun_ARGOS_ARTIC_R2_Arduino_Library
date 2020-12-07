@@ -505,7 +505,7 @@ public:
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
-	boolean attenuateTXgain(boolean attenuate = false); // Attenuate the TX gain by 8dB
+	boolean attenuateTXgain(boolean attenuate = false); // If attenuate is true, the TX gain is attenuated by approx. 5dB. Default to full power.
 
 	void enableARTICpower(); // Enable power for the ARTIC R2 by pulling the power enable pin high
 	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin low
@@ -620,7 +620,7 @@ private:
 	int _rf_pwr_en; // Pull this pin high to enable power for the RF amplifier
 	int _int1; // ARTIC R2 Interrupt 1 pin
 	int _int2; // ARTIC R2 Interrupt 2 pin
-	int _gain8 = -1; // Pull this pin high to attenuate the gain by 8dB
+	int _gain8 = -1; // Pull this pin high to use the full transmit power
 
 	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
 	// This allows some time for the internal memory access block to retrieve the first data sample.
