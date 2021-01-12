@@ -33,7 +33,7 @@
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
-#define ARTIC_R2_UPLOAD_FIRMWARE // Comment this line to save memory once the flash memory on the ARTIC R2 Breakout has been programmed successfully
+//#define ARTIC_R2_UPLOAD_FIRMWARE // Uncomment this line to configure the ARTIC R2 firmware via SPI, instead of booting from flash memory
 
 #ifdef ARTIC_R2_UPLOAD_FIRMWARE
 // Include firmware binary data
