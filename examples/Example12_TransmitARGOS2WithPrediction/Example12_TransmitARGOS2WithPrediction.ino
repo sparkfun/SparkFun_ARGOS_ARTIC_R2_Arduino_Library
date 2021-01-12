@@ -52,8 +52,6 @@
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
-  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
-
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
   https://www.sparkfun.com/products/15574

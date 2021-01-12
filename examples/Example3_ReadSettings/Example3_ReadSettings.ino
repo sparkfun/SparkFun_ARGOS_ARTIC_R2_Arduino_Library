@@ -12,8 +12,6 @@
   Feel like supporting our work? Buy a board from SparkFun!
   https://www.sparkfun.com/products/17236
 
-  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
-
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
   https://www.sparkfun.com/products/15574
