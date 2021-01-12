@@ -41,7 +41,7 @@ ARTIC_R2 myARTIC;
 // Pin assignments for the SparkFun Thing Plus - Artemis
 // (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
 int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;
