@@ -41,8 +41,9 @@ The ARTIC R2 can either boot from on-board flash memory, or the firmware can be 
 This library supports both methods but defaults to booting from on-board flash.
 
 If you want to change this, you will need to edit [the library header file](https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/blob/master/src/SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h#L36)
-and uncomment the line which says ```#define ARTIC_R2_UPLOAD_FIRMWARE```. From then on the ARTIC R2 will be booted via SPI instead. **Note: the ARTIC006 firmware
-occupies 127KBytes of program memory. You will need an MCU with adequate memory if you choose to boot via SPI.**
+and uncomment the line which says ```#define ARTIC_R2_UPLOAD_FIRMWARE```. From then on the ARTIC R2 will be booted via SPI instead.
+
+**Note: the ARTIC006 firmware occupies 127KBytes of program memory. You will need an MCU with adequate memory if you choose to boot via SPI.**
 
 License Information
 -------------------
