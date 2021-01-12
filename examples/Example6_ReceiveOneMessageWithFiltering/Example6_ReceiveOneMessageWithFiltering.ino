@@ -23,8 +23,6 @@
 
   This example requires a Platform ID. Copy and paste your 28-bit Platform ID into ADDRESS_LS_BITS and ADDRESS_MS_BITS. (See below)
 
-  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
-
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
   https://www.sparkfun.com/products/15574
@@ -53,7 +51,7 @@ ARTIC_R2 myARTIC;
 // Pin assignments for the SparkFun Thing Plus - Artemis
 // (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
 int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;

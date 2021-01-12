@@ -81,7 +81,7 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	if (_gain8 >= 0) // Set the RF TX gain the pin is defined
 	{
 		pinMode(_gain8, OUTPUT);
-		attenuateTXgain(true); // Set the TX gain to minimum while we turn the power on, to reduce the current surge
+		attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
@@ -94,7 +94,7 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	enableRFpower(); // Enable power for the RF amplifier
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 
-	// Now ramp up the TX gain, if the _gain8 pin is defined, to reduce the current surge
+	// Now ramp up the TX gain, if the _gain8 pin is defined
 	if (_gain8 >= 0)
 	{
 		attenuateTXgain(false);
@@ -613,19 +613,19 @@ void ARTIC_R2::enableDebugging(Stream &debugPort)
 //Returns true if the gain pin has been defined
 boolean ARTIC_R2::attenuateTXgain(boolean attenuate)
 {
-	if (_gain8 >= 0)
+	if (_gain8 >= 0) // Has the G8 pin been defined?
 	{
 		if (attenuate == true)
 		{
-			digitalWrite(_gain8, HIGH); // The opto-isolator inverts the signal
+			digitalWrite(_gain8, LOW);
 			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation enabled. Gain reduced by 8dB"));
+				_debugPort->println(F("attenuateTXgain: attenuation enabled. Gain reduced by approx. 5dB"));
 		}
 		else
 		{
-			digitalWrite(_gain8, LOW);
+			digitalWrite(_gain8, HIGH);
 			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation disabled"));
+				_debugPort->println(F("attenuateTXgain: attenuation disabled. Transmitting at full power"));
 		}
 		return (true);
 	}

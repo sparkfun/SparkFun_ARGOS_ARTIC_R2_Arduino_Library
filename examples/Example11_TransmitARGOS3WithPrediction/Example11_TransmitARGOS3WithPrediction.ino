@@ -52,8 +52,6 @@
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
-  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
-
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
   https://www.sparkfun.com/products/15574
@@ -83,7 +81,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 1 2020 11 12 22  8 25  6891.645  97.4589  114.264  -23.755   95.0184  -2.38 MA A 5 3 0 2020 11 12 22 39  6  7195.610  98.5050  327.217  -25.341  101.3601   0.00 MB 9 3 0 0 2020 11 12 22 12 22  7195.608  98.7139  349.454  -25.340  101.3595   0.00 MC B 7 3 0 2020 11 12 23  6 13  7195.726  98.7206  336.328  -25.340  101.3619   0.00 15 5 0 0 0 2020 11 12 21 45 44  7180.402  98.7057  323.207  -25.259  101.0389  -0.78 18 8 0 0 0 2020 11 12 21 56 28  7225.954  99.0271  353.993  -25.498  101.9995  -0.87 19 C 6 0 0 2020 11 12 22 17 42  7226.390  99.1936  300.217  -25.499  102.0083  -0.46 SR D 4 3 0 2020 11 12 22 22 32  7160.134  98.5397  113.108  -25.153  100.6125  -0.21";
+const char AOP[] =      " A1 6 0 0 3 2021  1 11 23 12 19  6891.416  97.4575   98.187  -23.753   95.0137  -4.37 MA A 5 3 0 2021  1 11 21 57 13  7195.566  98.4953  336.322  -25.341  101.3592   0.00 MB 9 3 0 0 2021  1 11 23 12 11  7195.723  98.7043  334.538  -25.340  101.3619   0.00 MC B 7 3 0 2021  1 11 22 24 42  7195.579  98.7118  346.795  -25.339  101.3589   0.00 15 5 0 0 0 2021  1 11 23 14 56  7180.412  98.6982  301.344  -25.259  101.0391  -0.44 18 8 0 0 0 2021  1 11 23 31 30  7225.882  99.0179  331.504  -25.498  101.9980  -1.02 19 C 6 0 0 2021  1 11 22 17 49  7226.361  99.1907  302.582  -25.499  102.0077  -0.56 SR D 4 3 0 2021  1 11 22 49 31  7160.194  98.5371  106.306  -25.153  100.6137  -0.31";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -103,7 +101,7 @@ SFE_UBLOX_GPS myGPS;
 // Pin assignments for the SparkFun Thing Plus - Artemis
 // (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
 int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;

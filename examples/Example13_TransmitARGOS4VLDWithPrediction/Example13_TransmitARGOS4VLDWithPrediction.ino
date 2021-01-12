@@ -54,8 +54,6 @@
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
 
-  The ARTIC firmware takes up 127KB of program memory! Please choose a processor with memory to spare.
-
   Hardware Connections:
   This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
   https://www.sparkfun.com/products/15574
@@ -86,7 +84,7 @@ const uint8_t numARGOSsatellites = 1; // Change this if required to match the nu
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // At the time of writing, only ANGELS A1 supports ARGOS-4
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04";
-const char AOP[] =      " A1 6 0 0 1 2020 11 12 22  8 25  6891.645  97.4589  114.264  -23.755   95.0184  -2.38";
+const char AOP[] =      " A1 6 0 0 3 2021  1 11 23 12 19  6891.416  97.4575   98.187  -23.753   95.0137  -4.37";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -106,7 +104,7 @@ SFE_UBLOX_GPS myGPS;
 // Pin assignments for the SparkFun Thing Plus - Artemis
 // (Change these if required)
 int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. Breakout defaults to maximum power.
+int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
 int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;
