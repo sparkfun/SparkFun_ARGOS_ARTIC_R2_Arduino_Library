@@ -156,6 +156,16 @@ const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 = 0xA; // 184 user bits (with a
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 = 0xC; // 216 user bits (with a 28-bit Platform ID)
 const uint8_t ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 = 0xF; // 248 user bits (with a 28-bit Platform ID)
 
+// ARGOS PTT-A2 User Message Bits
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_1 = 24; // 24 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_2 = 56; // 56 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_3 = 88; // 88 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_4 = 120; // 120 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_5 = 152; // 152 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_6 = 184; // 184 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_7 = 216; // 216 user bits (with a 28-bit Platform ID)
+const uint8_t ARTIC_R2_PTT_A2_USER_BITS_N_8 = 248; // 248 user bits (with a 28-bit Platform ID)
+
 // The ARGOS PTT-A3 message format is defined in:
 // Platform Transmitter Terminal (PTT-A3, including PTT-ZE) - Platform Message Transceiver (PMT-A3)
 // - Physical Layer System Requirements, AS3-SP-516-274-CNES
@@ -172,6 +182,16 @@ const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_152 = 0x9; // 152 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_184 = 0xA; // 184 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_216 = 0xC; // 216 user bits
 const uint8_t ARTIC_R2_PTT_A3_MESSAGE_LENGTH_248 = 0xF; // 248 user bits
+
+// ARGOS 3 PTT-A3 User Message Bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_1 = 24; // 24 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_2 = 56; // 56 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_3 = 88; // 88 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_4 = 120; // 120 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_5 = 152; // 152 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_6 = 184; // 184 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_7 = 216; // 216 user bits
+const uint8_t ARTIC_R2_PTT_A3_USER_BITS_N_8 = 248; // 248 user bits
 
 // ARGOS 3 PTT-A3 Number Of Tail Bits
 const uint8_t ARTIC_R2_PTT_A3_NUM_TAIL_BITS_24 = 7; // 24 user bits
@@ -574,6 +594,20 @@ public:
 	boolean setPayloadARGOS4VLDshort(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
 	boolean setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 4 VLD message containing GPS lat & lon in a compact form which ARGOS Web understands
 	boolean setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1, uint32_t payload2); // Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
+
+	// Set the Tx payload for a ARGOS PTT-A2 message containing Nx32_bits * 32 bit words (1<=N<=8)
+	// Special note:
+	//   Because the platform ID is 28 bits (not 20), only the 24 least-significant bits of the first payload uint32_t are used.
+	//   The 8 most-significant bits of the first payload uint32_t are ignored.
+	//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
+	boolean setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload);
+
+	// Set the Tx payload for a ARGOS PTT-A3 message containing Nx32_bits * 32 bit words (1<=N<=8)
+	// Special note:
+	//   Only the 24 least-significant bits of the first payload uint32_t are used.
+	//   The 8 most-significant bits of the first payload uint32_t are ignored.
+	//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
+	boolean setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload);
 
 	// Storage for message transmission
 	// This storage is used by the setPayloadARGOS functions

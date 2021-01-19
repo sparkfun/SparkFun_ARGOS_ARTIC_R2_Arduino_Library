@@ -2804,6 +2804,121 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 	return setTxPayload();
 }
 
+// Set the Tx payload for a ARGOS PTT-A3 message containing Nx32_bits * 32 bit words (1<=N<=8)
+// Special note:
+//   Only the 24 least-significant bits of the first payload uint32_t are used.
+//   The 8 most-significant bits of the first payload uint32_t are ignored.
+//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload)
+{
+	// Tx length in bits
+	// For PTT-A3 messages, the total message length is the sum of:
+	//   4 message length bits
+	//   28 bits for the Platform ID
+	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248
+	//   7, 8 or 9 tail bits: see ARTIC_R2_PTT_A3_NUM_TAIL_BITS_
+
+	// First, check that Nx32_bits is in the range 1-8
+	if ((Nx32_bits == 0) || (Nx32_bits > 8))
+	{
+		if (_printDebug == true)
+		{
+			_debugPort->println(F("setPayloadARGOS3: Nx32_bits is invalid!"));
+		}
+		return (false);
+	}
+
+	// Calculate the total message length
+	uint16_t messageLen = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS;
+
+	if (Nx32_bits == 1) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_1;
+	else if (Nx32_bits == 2) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_2;
+	else if (Nx32_bits == 3) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_3;
+	else if (Nx32_bits == 4) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_4;
+	else if (Nx32_bits == 5) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_5;
+	else if (Nx32_bits == 6) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_6;
+	else if (Nx32_bits == 7) messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_7;
+	else messageLen += ARTIC_R2_PTT_A3_USER_BITS_N_8;
+
+	if (Nx32_bits == 1) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_24;
+	else if (Nx32_bits == 2) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_56;
+	else if (Nx32_bits == 3) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_88;
+	else if (Nx32_bits == 4) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_120;
+	else if (Nx32_bits == 5) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_152;
+	else if (Nx32_bits == 6) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_184;
+	else if (Nx32_bits == 7) messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_216;
+	else messageLen += ARTIC_R2_PTT_A3_NUM_TAIL_BITS_248;
+
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = messageLen >> 8;
+	_txPayloadBytes[2] = messageLen & 0xFF;
+
+	// The payload itself
+
+	// The message length | the platform ID
+	if (Nx32_bits == 1) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_24 << 4;
+	else if (Nx32_bits == 2) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4;
+	else if (Nx32_bits == 3) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_88 << 4;
+	else if (Nx32_bits == 4) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_120 << 4;
+	else if (Nx32_bits == 5) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_152 << 4;
+	else if (Nx32_bits == 6) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_184 << 4;
+	else if (Nx32_bits == 7) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_216 << 4;
+	else _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_248 << 4;
+
+	_txPayloadBytes[3] |= (platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = platformID & 0xFF;
+
+	// The user data
+	uint32_t userData = *payload; // Get the first user data word
+	_txPayloadBytes[7] = (userData >> 16) & 0xFF; // Copy the 24 least-significant bits
+	_txPayloadBytes[8] = (userData >> 8) & 0xFF;
+	_txPayloadBytes[9] = userData & 0xFF;
+
+	uint32_t totalBytes = 10;
+
+	// The remainder of the user data - if required
+	uint8_t count = 1;
+	while (count < Nx32_bits)
+	{
+		//userData = *(payload + (count * sizeof(uint32_t))); // Get the next user data word
+		userData = *(payload + count); // Get the next user data word
+		_txPayloadBytes[totalBytes++] = (userData >> 24) & 0xFF;
+		_txPayloadBytes[totalBytes++] = (userData >> 16) & 0xFF;
+		_txPayloadBytes[totalBytes++] = (userData >> 8) & 0xFF;
+		_txPayloadBytes[totalBytes++] = userData & 0xFF;
+		count++;
+	}
+
+	// Tail bits
+	_txPayloadBytes[totalBytes++] = 0x00; // True for 7, 8 or 9 tail bits
+	if ((Nx32_bits == 3) || (Nx32_bits == 6))
+	{
+		_txPayloadBytes[totalBytes++] = 0x00; // 9 tail bits
+	}
+
+	// Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	for (uint8_t stuffing = 0; stuffing < (totalBytes % 3); stuffing++)
+	{
+		_txPayloadBytes[totalBytes++] = 0x00;
+	}
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS3: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < totalBytes; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
 // Set the Tx payload for a ARGOS PTT-A2 message
 // The message contains the GPS latitude and longitude in a compact form which ARGOS Web will understand.
 // Please contact CLS / Woods Hole Group and ask them to apply the SPARKFUN_GPS template on ARGOS Web.
@@ -2823,7 +2938,7 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 
 	_txPayloadBytes[0] = 0x00;
 	_txPayloadBytes[1] = 0x00;
-	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56;
+	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A2_USER_BITS_N_2;
 
 	// The payload itself
 	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
@@ -2863,6 +2978,105 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	{
 		_debugPort->print(F("setPayloadARGOS2LatLon: left-justified payload is 0x"));
 		for (uint16_t i = 0; i < 15; i++)
+		{
+			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
+			_debugPort->print(_txPayloadBytes[i], HEX);
+		}
+		_debugPort->println();
+	}
+
+	return setTxPayload();
+}
+
+// Set the Tx payload for a ARGOS PTT-A2 message containing Nx32_bits * 32 bit words (1<=N<=8)
+// Special note:
+//   Because the platform ID is 28 bits (not 20), only the 24 least-significant bits of the first payload uint32_t are used.
+//   The 8 most-significant bits of the first payload uint32_t are ignored.
+//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
+// Returns true if the payload was set successfully
+boolean ARTIC_R2::setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload)
+{
+	// Tx length in bits
+	// For PTT-A2 messages, the total message length is the sum of:
+	//   4 message length bits
+	//   28 bits for the Platform ID
+	//   the number of user bits: 24, 56, 88, 120, 152, 184, 216 or 248 (with a 28-bit Platform ID)
+	// (PTT-A2 messages can also use a 20-bit Platform ID)
+
+	// First, check that Nx32_bits is in the range 1-8
+	if ((Nx32_bits == 0) || (Nx32_bits > 8))
+	{
+		if (_printDebug == true)
+		{
+			_debugPort->println(F("setPayloadARGOS2: Nx32_bits is invalid!"));
+		}
+		return (false);
+	}
+
+	// Calculate the total message length
+	uint16_t messageLen = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS;
+
+	if (Nx32_bits == 1) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_1;
+	else if (Nx32_bits == 2) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_2;
+	else if (Nx32_bits == 3) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_3;
+	else if (Nx32_bits == 4) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_4;
+	else if (Nx32_bits == 5) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_5;
+	else if (Nx32_bits == 6) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_6;
+	else if (Nx32_bits == 7) messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_7;
+	else messageLen += ARTIC_R2_PTT_A2_USER_BITS_N_8;
+
+	_txPayloadBytes[0] = 0x00;
+	_txPayloadBytes[1] = messageLen >> 8;
+	_txPayloadBytes[2] = messageLen & 0xFF;
+
+	// The payload itself
+
+	// The message length | the platform ID
+	if (Nx32_bits == 1) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_24 << 4;
+	else if (Nx32_bits == 2) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4;
+	else if (Nx32_bits == 3) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_88 << 4;
+	else if (Nx32_bits == 4) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_120 << 4;
+	else if (Nx32_bits == 5) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_152 << 4;
+	else if (Nx32_bits == 6) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_184 << 4;
+	else if (Nx32_bits == 7) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 << 4;
+	else _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 << 4;
+
+	_txPayloadBytes[3] |= (platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = platformID & 0xFF;
+
+	// The user data
+	uint32_t userData = *payload; // Get the first user data word
+	_txPayloadBytes[7] = (userData >> 16) & 0xFF; // Copy the 24 least-significant bits
+	_txPayloadBytes[8] = (userData >> 8) & 0xFF;
+	_txPayloadBytes[9] = userData & 0xFF;
+
+	uint32_t totalBytes = 10;
+
+	// The remainder of the user data - if required
+	uint8_t count = 1;
+	while (count < Nx32_bits)
+	{
+		//userData = *(payload + (count * sizeof(uint32_t))); // Get the next user data word
+		userData = *(payload + count); // Get the next user data word
+		_txPayloadBytes[totalBytes++] = (userData >> 24) & 0xFF;
+		_txPayloadBytes[totalBytes++] = (userData >> 16) & 0xFF;
+		_txPayloadBytes[totalBytes++] = (userData >> 8) & 0xFF;
+		_txPayloadBytes[totalBytes++] = userData & 0xFF;
+		count++;
+	}
+
+	// Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
+	for (uint8_t stuffing = 0; stuffing < (totalBytes % 3); stuffing++)
+	{
+		_txPayloadBytes[totalBytes++] = 0x00;
+	}
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("setPayloadARGOS2: left-justified payload is 0x"));
+		for (uint16_t i = 0; i < totalBytes; i++)
 		{
 			if (_txPayloadBytes[i] < 0x10) _debugPort->print(F("0"));
 			_debugPort->print(_txPayloadBytes[i], HEX);
