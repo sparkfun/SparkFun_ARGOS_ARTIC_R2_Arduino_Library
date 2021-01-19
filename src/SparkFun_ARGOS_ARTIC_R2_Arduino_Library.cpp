@@ -2879,11 +2879,10 @@ boolean ARTIC_R2::setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint3
 
 	uint32_t totalBytes = 10;
 
-	// The remainder of the user data - if required
+	// Add the remainder of the user data
 	uint8_t count = 1;
 	while (count < Nx32_bits)
 	{
-		//userData = *(payload + (count * sizeof(uint32_t))); // Get the next user data word
 		userData = *(payload + count); // Get the next user data word
 		_txPayloadBytes[totalBytes++] = (userData >> 24) & 0xFF;
 		_txPayloadBytes[totalBytes++] = (userData >> 16) & 0xFF;
@@ -3054,11 +3053,10 @@ boolean ARTIC_R2::setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint3
 
 	uint32_t totalBytes = 10;
 
-	// The remainder of the user data - if required
+	// Add the remainder of the user data
 	uint8_t count = 1;
 	while (count < Nx32_bits)
 	{
-		//userData = *(payload + (count * sizeof(uint32_t))); // Get the next user data word
 		userData = *(payload + count); // Get the next user data word
 		_txPayloadBytes[totalBytes++] = (userData >> 24) & 0xFF;
 		_txPayloadBytes[totalBytes++] = (userData >> 16) & 0xFF;
