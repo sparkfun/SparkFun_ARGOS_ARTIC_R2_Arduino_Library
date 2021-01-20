@@ -141,7 +141,7 @@ void loop()
       // Due to frequency regulations, the frequency ranges [400.05 MHz to 401.0 MHz] and [401.2 MHz to 401.3 MHz] are forbidden for A2 transmissions.
       if (myARTIC.setARGOS23TxFrequency(401.630) == false)
       {
-        Serial.println("setARGOS4TxFrequency failed. Freezing...");
+        Serial.println("setARGOS23TxFrequency failed. Freezing...");
         while (1)
           ; // Do nothing more
       }
@@ -177,12 +177,12 @@ void loop()
           ; // Do nothing more
       }
 
-
+/*
         // Read the payload back again and print it
         myARTIC.readTxPayload();
         myARTIC.printTxPayload();
         Serial.println();
-
+*/
 
       // Wait for the next repetition period
       while ((lastTransmit + repetitionPeriod) > millis())
