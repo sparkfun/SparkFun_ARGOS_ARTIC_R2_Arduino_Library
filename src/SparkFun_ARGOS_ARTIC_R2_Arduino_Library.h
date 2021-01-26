@@ -565,7 +565,7 @@ public:
 	uint32_t readTCXOWarmupTime(); // Read the TCXO warm up time
 	uint32_t readTxCertificationInterval(); // Read the TX certification interval
 
-	boolean setTCXOControl(float voltage = 3.3, bool autoDisable = true); // Set the TCXO control voltage and auto-disable. Default to 3.3V and leave enabled.
+	boolean setTCXOControl(float voltage = 1.8, bool autoDisable = true); // Set the TCXO control voltage and auto-disable. Default to 1.8V and leave enabled.
 	float readTCXOControlVoltage(); // Read the TCXO control voltage. Auto-disable is ignored.
 	boolean readTCXOAutoDisable(); // Read the TCXO control auto-disable bit
 

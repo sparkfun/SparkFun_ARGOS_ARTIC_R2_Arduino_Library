@@ -1922,10 +1922,11 @@ float ARTIC_R2::readTCXOControlVoltage()
 	TCXO_Control_Register tcxo_control;
 	tcxo_control.TCXO_CONTROL_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
 
-	if (tcxo_control.CONTROL_REGISTER_BITS.SELECT_3V3 == 1) // Check for 3.3V
-		return (3.3);
-	else if (tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V8 = 1) // Check for 1.8V
+	// From the ARTIC datasheet: "Selecting 1V8 trumps 3V3 select, which trumps on its turn 1V3 to 2V7 selection"
+	if (tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V8 == 1) // Check for 1.8V
 		return (1.8);
+	else if (tcxo_control.CONTROL_REGISTER_BITS.SELECT_3V3 == 1) // Check for 3.3V
+		return (3.3);
 	else
 	{
 		float voltage = tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V3_TO_2V7;
