@@ -2,12 +2,13 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: November 12th 2020
+  Date: January 26th 2021
 
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
+    sets the TCXO voltage;
     sets the satellite detection timeout to 600 seconds;
     starts satellite detection;
     keeps checking the MCU status until a satellite is detected or the detection times out.
@@ -86,6 +87,14 @@ void setup()
   ARGOS_Configuration_Register configuration;
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration); // Pretty-print the TX and RX configuration to Serial
+
+  // Set the TCXO voltage to 1.8V and autoDisable to 1
+  if (myARTIC.setTCXOControl(1.8, true) == false)
+  {
+    Serial.println("setTCXOControl failed. Freezing...");
+    while (1)
+      ; // Do nothing more
+  }
 
   // Set the satellite detection timeout to 600 seconds
   if (myARTIC.setSatelliteDetectionTimeout(600) == false)

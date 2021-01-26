@@ -2,12 +2,14 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: January 19th 2021
+  Date: January 26th 2021
 
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
+    sets the TCXO voltage;
+    sets the TCXO warmup time;
     sets the satellite detection timeout to 60 seconds;
     sets the TX mode to ARGOS PTT A2;
     sets the TX frequency;
@@ -112,6 +114,22 @@ void loop()
     // Configure the ARTIC
     case configure_ARTIC:
     {
+      // Set the TCXO voltage to 1.8V and autoDisable to 1
+      if (myARTIC.setTCXOControl(1.8, true) == false)
+      {
+        Serial.println("setTCXOControl failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
+      // Set the TCXO warm-up time
+      if (myARTIC.setTCXOWarmupTime(tcxoWarmupTime) == false)
+      {
+        Serial.println("setTCXOWarmupTime failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
       // Set the satellite detection timeout to 60 seconds
       if (myARTIC.setSatelliteDetectionTimeout(60) == false)
       {

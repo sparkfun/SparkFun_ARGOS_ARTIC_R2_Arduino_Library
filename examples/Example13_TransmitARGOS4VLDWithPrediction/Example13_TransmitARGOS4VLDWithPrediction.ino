@@ -2,7 +2,7 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: November 12th 2020
+  Date: January 26th 2021
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -18,6 +18,8 @@
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
+    sets the TCXO voltage;
+    sets the TCXO warmup time;
     sets the satellite detection timeout to 60 seconds;
     sets the TX mode to ARGOS A4 VLD;
     sets the TX frequency;
@@ -89,7 +91,7 @@ const char AOP[] =      " A1 6 0 0 3 2021  1 11 23 12 19  6891.416  97.4575   98
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
 //  45 degrees is really only suitable for urban environments and will severely limit the number of transmit windows...
-float min_elevation = 15.0;
+float min_elevation = 5.0;
 
 #include <SPI.h>
 
@@ -181,6 +183,22 @@ void loop()
     // Configure the ARTIC
     case configure_ARTIC:
     {
+      // Set the TCXO voltage to 1.8V and autoDisable to 1
+      if (myARTIC.setTCXOControl(1.8, true) == false)
+      {
+        Serial.println("setTCXOControl failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
+      // Set the TCXO warm-up time
+      if (myARTIC.setTCXOWarmupTime(tcxoWarmupTime) == false)
+      {
+        Serial.println("setTCXOWarmupTime failed. Freezing...");
+        while (1)
+          ; // Do nothing more
+      }
+
       // Set the satellite detection timeout to 60 seconds
       if (myARTIC.setSatelliteDetectionTimeout(60) == false)
       {

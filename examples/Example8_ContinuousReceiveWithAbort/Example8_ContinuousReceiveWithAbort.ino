@@ -2,13 +2,14 @@
   Using the ARGOS ARTIC R2 Breakout
   By: Paul Clark
   SparkFun Electronics
-  Date: November 12th 2020
+  Date: January 26th 2021
 
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
     reads and prints the firmware status;
     sets the RX mode to ARGOS 3;
+    sets the TCXO voltage;
     enables RX transparent mode (so we will receive all valid messages even if they are not addressed to us);
     instructs the ARTIC to Start Continuous Reception;
     keeps checking the MCU status;
@@ -110,6 +111,14 @@ void setup()
   // Read and print the ARGOS configuration
   myARTIC.readARGOSconfiguration(&configuration);
   myARTIC.printARGOSconfiguration(configuration);
+
+  // Set the TCXO voltage to 1.8V and autoDisable to 1
+  if (myARTIC.setTCXOControl(1.8, true) == false)
+  {
+    Serial.println("setTCXOControl failed. Freezing...");
+    while (1)
+      ; // Do nothing more
+  }
 
   // Enable RX transparent mode so we will receive all valid messages even if they are not addressed to us
   if (myARTIC.enableRXTransparentMode() == false)
