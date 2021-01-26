@@ -1840,14 +1840,18 @@ uint32_t ARTIC_R2::readTxCertificationInterval()
 
 // Set the TCXO control voltage and auto-disable
 // Returns true if the values were set successfully
-boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
+boolean ARTIC_R2::setTCXOControl(float voltage_f, bool autoDisable)
 {
-	if ((voltage < 1.3) || ((voltage > 2.7) && (voltage < 3.3)) || (voltage > 3.3))
+	// Convert the voltage from float to int (volts * 10) to avoid any issues with (voltage == 1.8)
+	int voltage = voltage_f * 10;
+
+	// Check voltage is in range
+	if ((voltage < 13) || ((voltage > 27) && (voltage < 33)) || (voltage > 33))
 	{
 		if (_printDebug == true)
 		{
 			_debugPort->print(F("setTCXOControl: Invalid control voltage: "));
-			_debugPort->println(voltage);
+			_debugPort->println(voltage_f);
 		}
 		return (false);
 	}
@@ -1855,17 +1859,17 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 	TCXO_Control_Register tcxo_control;
 	tcxo_control.TCXO_CONTROL_REGISTER = 0x000000; // Clear the control register
 
-	if (voltage == 3.3) // Check for 3.3V
+	if (voltage == 33) // Check for 3.3V
 	{
 		tcxo_control.CONTROL_REGISTER_BITS.SELECT_3V3 = 1;
 	}
-	else if (voltage == 1.8) // Check for 1.8V
+	else if (voltage == 18) // Check for 1.8V
 	{
 		tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V8 = 1;
 	}
 	else // Calculate the nibble for 1.3V to 2.7V
 	{
-		uint32_t voltage_nibble = (voltage - 1.3) / 0.1;
+		uint32_t voltage_nibble = voltage - 13;
 		tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V3_TO_2V7 = voltage_nibble & 0x0F;
 	}
 
@@ -1894,7 +1898,21 @@ boolean ARTIC_R2::setTCXOControl(float voltage, bool autoDisable)
 	float new_voltage = readTCXOControlVoltage();
 	boolean new_disable = readTCXOAutoDisable();
 
-	return ((new_voltage == voltage) && (new_disable == autoDisable));
+	boolean success = (new_voltage == voltage_f) && (new_disable == autoDisable);
+
+	if ((_printDebug == true) && (success == false))
+	{
+		_debugPort->print(F("setTCXOControl: failed! voltage: "));
+		_debugPort->print(voltage_f, 2);
+		_debugPort->print(F(" new_voltage: "));
+		_debugPort->print(new_voltage, 2);
+		_debugPort->print(F(" autoDisable: "));
+		_debugPort->print(autoDisable);
+		_debugPort->print(F(" new_disable: "));
+		_debugPort->println(new_disable);
+	}
+
+	return (success);
 }
 
 // Read and return the TCXO control voltage. Auto-disable is ignored.
@@ -1920,7 +1938,19 @@ float ARTIC_R2::readTCXOControlVoltage()
 	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
 
 	TCXO_Control_Register tcxo_control;
-	tcxo_control.TCXO_CONTROL_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]); // Return the firmware status
+	tcxo_control.TCXO_CONTROL_REGISTER = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("readTCXOControlVoltage: AUTO_DISABLE: "));
+		_debugPort->print(tcxo_control.CONTROL_REGISTER_BITS.AUTO_DISABLE);
+		_debugPort->print(F(" SELECT_1V3_TO_2V7: "));
+		_debugPort->print(tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V3_TO_2V7);
+		_debugPort->print(F(" SELECT_1V8: "));
+		_debugPort->print(tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V8);
+		_debugPort->print(F(" SELECT_3V3: "));
+		_debugPort->println(tcxo_control.CONTROL_REGISTER_BITS.SELECT_3V3);
+	}
 
 	// From the ARTIC datasheet: "Selecting 1V8 trumps 3V3 select, which trumps on its turn 1V3 to 2V7 selection"
 	if (tcxo_control.CONTROL_REGISTER_BITS.SELECT_1V8 == 1) // Check for 1.8V
