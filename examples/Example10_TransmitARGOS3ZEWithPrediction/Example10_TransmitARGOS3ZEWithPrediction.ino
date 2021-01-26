@@ -83,7 +83,7 @@ const char AOP[] =      " A1 6 0 0 3 2021  1 11 23 12 19  6891.416  97.4575   98
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
 //  45 degrees is really only suitable for urban environments and will severely limit the number of transmit windows...
-float min_elevation = 5.0;
+float min_elevation = 15.0;
 
 #include <SPI.h>
 
