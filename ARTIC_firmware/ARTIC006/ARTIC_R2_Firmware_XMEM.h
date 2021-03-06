@@ -1,12 +1,5 @@
 // ARTIC R2 ARTIC006 Firmware XMEM
 // Converted from ARTIC.flash
-
-#ifndef ARTIC_R2_XMEM_H
-#define ARTIC_R2_XMEM_H
-
-const uint32_t ARTIC_R2_XMEM_LEN = 21845;
-const uint32_t ARTIC_R2_XMEM_CHECKSUM = 0x4A51F6;
-const uint32_t ARTIC_R2_XMEM[21845] = {
 	0x000000,
 	0x000000,
 	0x000000,
@@ -21852,6 +21845,3 @@ const uint32_t ARTIC_R2_XMEM[21845] = {
 	0x000000,
 	0x000000,
 	0x000000
-};
-
-#endif

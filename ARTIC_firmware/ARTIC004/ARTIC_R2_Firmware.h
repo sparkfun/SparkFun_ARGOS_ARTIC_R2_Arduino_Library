@@ -7,6 +7,14 @@
 
 const uint8_t ARTIC_R2_FIRMWARE_VERSION = 4; // Make it clear that we are using ARTIC004
 
+const uint32_t ARTIC_R2_PMEM_LEN = 10240; // PMEM Length in 32-Bit Words
+const uint32_t ARTIC_R2_XMEM_LEN = 21845; // XMEM Length in 24-Bit Words
+const uint32_t ARTIC_R2_YMEM_LEN = 6826; // YMEM Length in 24-Bit Words
+
+const uint32_t ARTIC_R2_PMEM_CHECKSUM = 0x493982; // ARTIC004
+const uint32_t ARTIC_R2_XMEM_CHECKSUM = 0x32DBBA; // ARTIC004
+const uint32_t ARTIC_R2_YMEM_CHECKSUM = 0x65CC81; // ARTIC004
+
 // P Memory Locations
 const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
 
@@ -30,5 +38,26 @@ const uint16_t MEM_LOC_TX_CERTIFICATION_INTERVAL = 0x0379; // Size 1. Read/Write
 
 // IO Memory locations
 const uint16_t MEM_LOC_FIRMWARE_STATUS_REGISTER = 0x8018;
+
+// Include the firmware for SPI upload - if desired
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+
+// Include firmware binary data
+// P 32-bit 10240 DSP Program memory
+const uint32_t ARTIC_R2_PMEM[ARTIC_R2_PMEM_LEN] = {
+#include "ARTIC_R2_Firmware_PMEM.h"
+};
+
+// X 24-bit 21845 DSP X memory
+const uint32_t ARTIC_R2_XMEM[ARTIC_R2_XMEM_LEN] = {
+#include "ARTIC_R2_Firmware_XMEM.h"
+};
+
+// Y 24-bit 6826 DSP Y memory
+const uint32_t ARTIC_R2_YMEM[ARTIC_R2_YMEM_LEN] = {
+#include "ARTIC_R2_Firmware_YMEM.h"
+};
+
+#endif
 
 #endif

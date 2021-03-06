@@ -35,17 +35,7 @@
 
 //#define ARTIC_R2_UPLOAD_FIRMWARE // Uncomment this line to configure the ARTIC R2 firmware via SPI, instead of booting from flash memory
 
-#ifdef ARTIC_R2_UPLOAD_FIRMWARE
-// Include firmware binary data
-// P 32-bit 10240 DSP Program memory
-// X 24-bit 21845 DSP X memory
-// Y 24-bit 6826 DSP Y memory
-#include "ARTIC_R2_Firmware_PMEM.h"
-#include "ARTIC_R2_Firmware_XMEM.h"
-#include "ARTIC_R2_Firmware_YMEM.h"
-#endif
-
-#include "ARTIC_R2_Firmware_Memory_Locations.h" // This file defines the firmware parameter memory locations. The locations for ARTIC004 and ARTIC006 are very different!
+#include "ARTIC_R2_Firmware.h" // This file defines the firmware parameter memory locations. The locations for ARTIC004 and ARTIC006 are very different!
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 

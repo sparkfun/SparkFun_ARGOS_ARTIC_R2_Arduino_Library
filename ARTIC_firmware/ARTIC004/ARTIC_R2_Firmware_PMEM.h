@@ -1,12 +1,5 @@
 // ARTIC R2 ARTIC004 Firmware PMEM
 // Converted from Firmware_ARTIC004_flash_image.bin
-
-#ifndef ARTIC_R2_PMEM_H
-#define ARTIC_R2_PMEM_H
-
-const uint32_t ARTIC_R2_PMEM_LEN = 10240;
-const uint32_t ARTIC_R2_PMEM_CHECKSUM = 0x493982;
-const uint32_t ARTIC_R2_PMEM[10240] = {
 	0x0d000008,
 	0x0d001b52,
 	0x0d001bb3,
@@ -10247,6 +10240,3 @@ const uint32_t ARTIC_R2_PMEM[10240] = {
 	0x00000000,
 	0x00000000,
 	0x00000000
-};
-
-#endif

@@ -1,12 +1,5 @@
 // ARTIC R2 ARTIC004 Firmware YMEM
 // Converted from Firmware_ARTIC004_flash_image.bin
-
-#ifndef ARTIC_R2_YMEM_H
-#define ARTIC_R2_YMEM_H
-
-const uint32_t ARTIC_R2_YMEM_LEN = 6826;
-const uint32_t ARTIC_R2_YMEM_CHECKSUM = 0x65CC81;
-const uint32_t ARTIC_R2_YMEM[6826] = {
 	0x000001,
 	0x000001,
 	0x000001,
@@ -6833,6 +6826,3 @@ const uint32_t ARTIC_R2_YMEM[6826] = {
 	0x000000,
 	0x000000,
 	0x000000
-};
-
-#endif
