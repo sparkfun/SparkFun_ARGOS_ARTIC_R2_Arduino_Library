@@ -629,6 +629,7 @@ public:
 	char* const convertEpochToDateTimeAOP(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string in AOP format
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
+	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
 
 private:
 	//Variables

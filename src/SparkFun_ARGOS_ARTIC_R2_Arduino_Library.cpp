@@ -4196,6 +4196,25 @@ boolean ARTIC_R2::convertAOPtoParameters(const char *AOP, bulletin_data_t *satel
 	return (result);
 }
 
+// Convert the Allcast JSON Date Time to Epoch
+uint32_t ARTIC_R2::convertAllcastDateTimeToEpoch(const char *DateTime)
+{
+	struct tm t;
+  time_t t_of_day;
+
+	// Extract the date (epoch)
+	t.tm_year = ((DateTime[0] - 0x30) * 1000) + ((DateTime[1] - 0x30) * 100) + ((DateTime[2] - 0x30) * 10) + ((DateTime[3] - 0x30)) - 1900;  // Year - 1900
+  t.tm_mon = (((DateTime[5] - 0x30)) * 10) + (DateTime[6] - 0x30) - 1; // Month, *** where 0 = jan ***
+  t.tm_mday = (((DateTime[8] - 0x30)) * 10) + (DateTime[9] - 0x30); // Day of the month
+  t.tm_hour = (((DateTime[11] - 0x30)) * 10) + (DateTime[12] - 0x30);
+  t.tm_min = (((DateTime[14] - 0x30)) * 10) + (DateTime[15] - 0x30);
+  t.tm_sec = (((DateTime[17] - 0x30)) * 10) + (DateTime[18] - 0x30);
+  t.tm_isdst = 0;         // Is DST on? 1 = yes, 0 = no, -1 = unknown
+  t_of_day = mktime(&t);
+
+	return ((uint32_t)t_of_day);
+}
+
 // Convert AOP text to float
 float ARTIC_R2::textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP)
 {
