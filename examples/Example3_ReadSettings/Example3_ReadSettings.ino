@@ -1,10 +1,10 @@
 /*
-  Using the ARGOS ARTIC R2 Breakout
+  Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: November 12th 2020
+  Date: March 21st 2021
 
-  This example begins (initializes) the ARTIC breakout and then reads and prints a bunch of settings.
+  This example begins (initializes) the ARTIC breakout or IOTA and then reads and prints a bunch of settings.
 
   License: please see the license file at:
   https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
@@ -21,12 +21,18 @@
   INT1_Pin = D5
   INT2_Pin = D6
   RESET_Pin = D7
-  ARTIC_PWR_EN_Pin = D8
+  ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D8
   RF_PWR_EN_Pin = D9
   (SPI COPI = D11)
   (SPI CIPO = D12)
   (SPI SCK = D13)
+
+  If you are using IOTA, uncomment the #define IOTA below.
+  IOTA only has one power enable pin. Uncommenting the #define IOTA will let the code run correctly on IOTA.
+  
 */
+
+//#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
 #include <SPI.h>
 
@@ -41,8 +47,12 @@ int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;
 int RESET_Pin = 7;
-int ARTIC_PWR_EN_Pin = 8;
+#ifdef IOTA
+int IOTA_PWR_EN_Pin = 8; // IOTA has a single power enable pin
+#else
+int ARTIC_PWR_EN_Pin = 8; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
 int RF_PWR_EN_Pin = 9;
+#endif
 
 void setup()
 {
@@ -60,7 +70,11 @@ void setup()
   //myARTIC.enableDebugging(Serial1); // E.g. enable debug messages to Serial1 instead
 
   // Begin (initialize) the ARTIC
+#ifdef IOTA
+  if (myARTIC.beginIOTA(CS_Pin, RESET_Pin, BOOT_Pin, IOTA_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
+#else
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
+#endif
   {
     Serial.println(F("ARTIC R2 not detected. Freezing..."));
     while (1)

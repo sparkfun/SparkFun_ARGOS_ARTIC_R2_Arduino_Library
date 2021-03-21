@@ -1,8 +1,8 @@
 /*
-  Using the ARGOS ARTIC R2 Breakout
+  Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: January 26th 2021
+  Date: March 21st 2021
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -63,12 +63,18 @@
   INT1_Pin = D5
   INT2_Pin = D6
   RESET_Pin = D7
-  ARTIC_PWR_EN_Pin = D8
+  ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D8
   RF_PWR_EN_Pin = D9
   (SPI COPI = D11)
   (SPI CIPO = D12)
   (SPI SCK = D13)
+
+  If you are using IOTA, uncomment the #define IOTA below.
+  IOTA only has one power enable pin. Uncommenting the #define IOTA will let the code run correctly on IOTA.
+  
 */
+
+//#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
 // CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
 // E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
@@ -83,7 +89,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 3 2021  1 11 23 12 19  6891.416  97.4575   98.187  -23.753   95.0137  -4.37 MA A 5 3 0 2021  1 11 21 57 13  7195.566  98.4953  336.322  -25.341  101.3592   0.00 MB 9 3 0 0 2021  1 11 23 12 11  7195.723  98.7043  334.538  -25.340  101.3619   0.00 MC B 7 3 0 2021  1 11 22 24 42  7195.579  98.7118  346.795  -25.339  101.3589   0.00 15 5 0 0 0 2021  1 11 23 14 56  7180.412  98.6982  301.344  -25.259  101.0391  -0.44 18 8 0 0 0 2021  1 11 23 31 30  7225.882  99.0179  331.504  -25.498  101.9980  -1.02 19 C 6 0 0 2021  1 11 22 17 49  7226.361  99.1907  302.582  -25.499  102.0077  -0.56 SR D 4 3 0 2021  1 11 22 49 31  7160.194  98.5371  106.306  -25.153  100.6137  -0.31";
+const char AOP[] =      " A1 6 0 0 3 2021  3 20 22 13 20  6891.128  97.4638  112.834  -23.752   95.0077  -3.25 MA A 5 3 0 2021  3 20 23 31 29  7195.551  98.4842  311.143  -25.341  101.3589   0.00 MB 9 3 0 0 2021  3 20 23  4 55  7195.639  98.6902  336.327  -25.340  101.3602   0.00 MC B 7 3 0 2021  3 20 22 17 46  7195.561  98.6978  348.552  -25.340  101.3585   0.00 15 5 0 0 0 2021  3 20 23  0 53  7180.317  98.6912  305.318  -25.259  101.0371  -0.73 18 8 0 0 0 2021  3 20 21 47 11  7225.823  99.0037  358.943  -25.498  101.9968  -0.94 19 C 6 0 0 2021  3 20 22 24  9  7226.338  99.1900  303.709  -25.499  102.0072  -0.42 SR D 4 3 0 2021  3 20 22 26  8  7160.123  98.5438  112.102  -25.153  100.6123  -0.23";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -108,8 +114,12 @@ int BOOT_Pin = 4;
 int INT1_Pin = 5;
 int INT2_Pin = 6;
 int RESET_Pin = 7;
-int ARTIC_PWR_EN_Pin = 8;
+#ifdef IOTA
+int IOTA_PWR_EN_Pin = 8; // IOTA has a single power enable pin
+#else
+int ARTIC_PWR_EN_Pin = 8; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
 int RF_PWR_EN_Pin = 9;
+#endif
 
 // Loop Steps - these are used by the switch/case in the main loop
 // This structure makes it easy to jump between any of the steps
@@ -163,7 +173,11 @@ void setup()
   Serial.println();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
+#ifdef IOTA
+  if (myARTIC.beginIOTA(CS_Pin, RESET_Pin, BOOT_Pin, IOTA_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
+#else
   if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
+#endif
   {
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)
