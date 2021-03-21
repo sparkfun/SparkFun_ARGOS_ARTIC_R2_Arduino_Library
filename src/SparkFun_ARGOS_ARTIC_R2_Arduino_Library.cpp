@@ -28,6 +28,16 @@
 
 boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
 {
+	return (beginInternal(false, user_CSPin, user_RSTPin, user_BOOTPin, user_ARTICPWRENPin, user_RFPWRENPin, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort));
+}
+
+boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
+{
+	return (beginInternal(true, user_CSPin, user_RSTPin, user_BOOTPin, user_IOTAPWRENPin, -1, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort));
+}
+
+boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
+{
 	if (_printDebug == true)
 		_debugPort->println(F("begin: ARTIC is starting..."));
 
@@ -57,8 +67,12 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	// Disable the power until we have configured the rest of the IO pins
 	pinMode(_artic_pwr_en, OUTPUT);
 	disableARTICpower();
-	pinMode(_rf_pwr_en, OUTPUT);
-	disableRFpower();
+
+	if (_rf_pwr_en >= 0)
+	{
+		pinMode(_rf_pwr_en, OUTPUT);
+		disableRFpower();
+	}
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
@@ -73,7 +87,7 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 #endif
 
 	pinMode(_rst, OUTPUT);
-	digitalWrite(_rst, LOW); //Place the ARTIC into reset
+	digitalWrite(_rst, HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
 
 	pinMode(_int1, INPUT_PULLUP);
 	pinMode(_int2, INPUT_PULLUP);
@@ -88,11 +102,16 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Make sure the power has been turned off for at least ARTIC_R2_POWER_ON_DELAY_MS
 
 	enableARTICpower(); // Enable power for the ARTIC R2
-
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_POWER_ON_DELAY_MS
 
-	enableRFpower(); // Enable power for the RF amplifier
-	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+	digitalWrite(_rst, LOW); //Now reset the ARTIC (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
+
+	if (_rf_pwr_en >= 0)
+	{
+		enableRFpower(); // Enable power for the RF amplifier
+		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+	}
 
 	// Now ramp up the TX gain, if the _gain8 pin is defined
 	if (_gain8 >= 0)
@@ -101,8 +120,8 @@ boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int u
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
-	//Bring the ARTIC out of reset
-	digitalWrite(_rst, HIGH);
+	digitalWrite(_rst, HIGH); //Now bring the ARTIC out of reset (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
 	if (_printDebug == true)
 		_debugPort->println(F("begin: IO pins are configured. ARTIC has been reset."));
@@ -652,13 +671,15 @@ void ARTIC_R2::disableARTICpower()
 // Enable power for the RF amplifier
 void ARTIC_R2::enableRFpower()
 {
-	digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout
+	if (_rf_pwr_en >= 0)
+		digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout
 }
 
 // Disable power for the RF amplifier
 void ARTIC_R2::disableRFpower()
 {
-	digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Breakout
+	if (_rf_pwr_en >= 0)
+		digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Breakout
 }
 
 // Read ARTIC R2 firmware status register
