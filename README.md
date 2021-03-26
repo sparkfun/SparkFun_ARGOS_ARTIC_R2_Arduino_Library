@@ -1,9 +1,9 @@
 SparkFun ARGOS ARTIC R2 Arduino Library
 ===========================================================
 
-[![SparkX ARTIC R2 Breakout](https://cdn.sparkfun.com//assets/parts/1/6/2/1/7/17236-Artic_R2_Breakout-01a.jpg)](https://www.sparkfun.com/products/17236)
+[![ARGOS ARTIC R2 Shield](https://cdn.sparkfun.com//assets/parts/1/6/2/1/7/17236-Artic_R2_Breakout-01a.jpg)](https://www.sparkfun.com/products/17236)
 
-[*SparkX ARTIC R2 Breakout*](https://www.sparkfun.com/products/17236)
+[*ARGOS ARTIC R2 Shield*](https://www.sparkfun.com/products/17236)
 
 The ARTIC R2 chipset allows you to send and receive short data messages to and from anywhere via the ARGOS satellite network. Dedicated to programs which are related to environmental protection,
 awareness or study, or to protecting human life, the ARGOS constellation provides full global coverage including the polar regions.
@@ -32,7 +32,7 @@ Documentation
 --------------
 
 * **[Installing an Arduino Library Guide](https://learn.sparkfun.com/tutorials/installing-an-arduino-library)** - Basic information on how to install an Arduino library.
-* **[Product Repository](https://github.com/sparkfunX/ARTIC_R2_Breakout)** - Main repository (including hardware files)
+* **[Product Repository](https://github.com/sparkfunX/ARGOS-ARTIC-R2-Shield)** - Main repository (including hardware files)
 
 Booting
 -------------------
