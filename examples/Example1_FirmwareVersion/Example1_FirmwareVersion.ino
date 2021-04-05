@@ -41,7 +41,7 @@
   INT2_Pin = D33
   RESET_Pin = D27
   ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D12
-  RF_PWR_EN_Pin = D13
+  RF_PWR_EN_Pin = D13     ** Please note: D13 on the ESP32 Thing Plus is LED_BUILTIN **
   (SPI COPI = D18)
   (SPI CIPO = D19)
   (SPI SCK = D5)
@@ -89,7 +89,7 @@ int RESET_Pin = 27;
 int IOTA_PWR_EN_Pin = 12; // IOTA has a single power enable pin
 #else
 int ARTIC_PWR_EN_Pin = 12; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
-int RF_PWR_EN_Pin = 13;
+int RF_PWR_EN_Pin = 13; // ** Please note: D13 on the ESP32 Thing Plus is LED_BUILTIN **
 #endif
 */
 
