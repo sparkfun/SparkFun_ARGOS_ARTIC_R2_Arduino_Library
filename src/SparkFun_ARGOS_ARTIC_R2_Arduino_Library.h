@@ -27,6 +27,12 @@
 #ifndef ARTIC_R2_H
 #define ARTIC_R2_H
 
+#if (ARDUINO >= 100)
+#include "Arduino.h" // ESP32 needs this - otherwise the code fails to compile
+#else
+#include "WProgram.h"
+#endif
+
 #include <time.h> // Needed for epoch calculation
 
 #include <SPI.h> // Needed for SPI communication
