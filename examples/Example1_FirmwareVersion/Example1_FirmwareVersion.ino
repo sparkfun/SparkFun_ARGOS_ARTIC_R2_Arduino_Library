@@ -32,6 +32,21 @@
   (SPI CIPO = D12)
   (SPI SCK = D13)
 
+  If you are using the SparkFun ESP32 Thing Plus, the pins are different:
+  https://www.sparkfun.com/products/15663
+  CS_Pin = A5 (D4)
+  GAIN8_Pin = D14
+  BOOT_Pin = D32
+  INT1_Pin = D15
+  INT2_Pin = D33
+  RESET_Pin = D27
+  ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D12
+  RF_PWR_EN_Pin = D13     ** Please note: D13 on the ESP32 Thing Plus is LED_BUILTIN **
+  (SPI COPI = D18)
+  (SPI CIPO = D19)
+  (SPI SCK = D5)
+
+
   If you are using IOTA, uncomment the #define IOTA below.
   IOTA only has one power enable pin. Uncommenting the #define IOTA will let the code run correctly on IOTA.
   
@@ -43,6 +58,7 @@
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
 ARTIC_R2 myARTIC;
+
 
 // Pin assignments for the SparkFun Thing Plus - Artemis
 // (Change these if required)
@@ -58,6 +74,24 @@ int IOTA_PWR_EN_Pin = 8; // IOTA has a single power enable pin
 int ARTIC_PWR_EN_Pin = 8; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
 int RF_PWR_EN_Pin = 9;
 #endif
+
+
+/*
+// Pin assignments for the SparkFun ESP32 Thing Plus
+// (Change these if required)
+int CS_Pin = 4;
+int GAIN8_Pin = 14; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
+int BOOT_Pin = 32;
+int INT1_Pin = 15;
+int INT2_Pin = 33;
+int RESET_Pin = 27;
+#ifdef IOTA
+int IOTA_PWR_EN_Pin = 12; // IOTA has a single power enable pin
+#else
+int ARTIC_PWR_EN_Pin = 12; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
+int RF_PWR_EN_Pin = 13; // ** Please note: D13 on the ESP32 Thing Plus is LED_BUILTIN **
+#endif
+*/
 
 void setup()
 {
