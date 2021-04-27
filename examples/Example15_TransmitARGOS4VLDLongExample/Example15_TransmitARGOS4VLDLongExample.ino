@@ -86,7 +86,9 @@ enum {
 } loop_steps;
 int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
 
-unsigned long lastTransmit = 0; // Keep a record of the last transmit
+// A4-SS-TER-SP-0079-CNES specifies a ±10% 'jitter' on the repetition period to reduce the risk of transmission collisions
+unsigned long nextTransmitTime; // Time of the next satellite transmission (before jitter is added)
+unsigned long nextTransmitTimeActual; // Actual time of the next satellite transmission (including jitter)
 
 void setup()
 {
@@ -114,6 +116,10 @@ void setup()
     while (1)
       ; // Do nothing more
   }
+
+  // Define the time of the first transmit
+  nextTransmitTime = repetitionPeriod;
+  nextTransmitTimeActual = nextTransmitTime - tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
 }
 
 void loop()
@@ -214,18 +220,20 @@ void loop()
 */
 
       // Wait for the next repetition period
-      while ((lastTransmit + repetitionPeriod) > millis())
+      while (nextTransmitTimeActual > millis())
       {
         if ((millis() % 1000) < 50) // Print how long it is until the next transmit
         {
           Serial.print(F("The next transmit will take place in "));
-          unsigned long remaining = ((lastTransmit + repetitionPeriod) - millis()) / 1000;
+          unsigned long remaining = (nextTransmitTimeActual - millis()) / 1000;
           Serial.print(remaining);
           Serial.println(F(" seconds"));
         }
         delay(50);
       }
-      lastTransmit = millis(); // Update lastTransmit
+      nextTransmitTime += repetitionPeriod;
+      nextTransmitTimeActual = nextTransmitTime + random((-0.1 * repetitionPeriod), (0.1 * repetitionPeriod));
+      nextTransmitTimeActual -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
 
       // Tell the ARTIC to do its thing!
       ARTIC_R2_MCU_Command_Result result = myARTIC.sendMCUinstruction(INST_TRANSMIT_ONE_PACKAGE_AND_GO_IDLE);
