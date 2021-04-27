@@ -92,7 +92,7 @@ const uint8_t numARGOSsatellites = 1; // Change this if required to match the nu
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // At the time of writing, only ANGELS A1 supports ARGOS-4
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04";
-const char AOP[] =      " A1 6 0 0 3 2021  3 20 22 13 20  6891.128  97.4638  112.834  -23.752   95.0077  -3.25";
+const char AOP[] =      " A1 6 0 0 3 2021  4 26 22 32  3  6890.985  97.4645  108.117  -23.751   95.0047  -3.68";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -136,7 +136,9 @@ enum {
 } loop_steps;
 int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
 
-uint32_t nextTransmitTime; // Time of the next satellite transmission
+// A4-SS-TER-SP-0079-CNES specifies a ±10% 'jitter' on the repetition period to reduce the risk of transmission collisions
+uint32_t nextTransmitTime; // Time of the next satellite transmission (before jitter is added)
+uint32_t nextTransmitTimeActual; // Actual time of the next satellite transmission (including jitter)
 uint8_t remainingTransmits; // Remaining number of satellite transmits
 boolean firstTransmit; // Flag to indicate if this is the first transmission on this satellite pass
 float lat_tx; // The latitude included in the transmitted message
@@ -373,10 +375,11 @@ void loop()
       if (numberTransmits >= 1)
       {
         nextTransmitTime = nextSatellitePass - (((numberTransmits - 1) / 2) * repetitionPeriod);
-        nextTransmitTime -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
+        nextTransmitTimeActual = nextTransmitTime + random((-0.1 * repetitionPeriod), (0.1 * repetitionPeriod));
+        nextTransmitTimeActual -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
         remainingTransmits = numberTransmits; // Remaining number of satellite transmits
 
-        //nextTransmitTime = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
+        //nextTransmitTimeActual = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
       }
       else
       {
@@ -389,6 +392,7 @@ void loop()
       while ((remainingTransmits > 0) && (nextTransmitTime < epochNow))
       {
         nextTransmitTime += repetitionPeriod;
+        nextTransmitTimeActual = nextTransmitTime; // Do not subtract the jitter or tcxoWarmup as we do not want the next transmit to be in the past
         remainingTransmits--;
       }
 
@@ -397,7 +401,7 @@ void loop()
         Serial.print(F("Transmit attempt 1 of "));
         Serial.print(remainingTransmits);
         Serial.print(F(" will take place at: "));
-        Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTime));
+        Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTimeActual));
         Serial.println(F(" UTC"));
 
         firstTransmit = true; // Set the firstTransmit flag
@@ -423,7 +427,7 @@ void loop()
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
       // Calculate how many seconds remain until the next transmit
-      int32_t secsRemaining = (int32_t)nextTransmitTime - (int32_t)epochNow;
+      int32_t secsRemaining = (int32_t)nextTransmitTimeActual - (int32_t)epochNow;
 
       // Count down in intervals of 100, then 10, then 1 second
       if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) ||
@@ -440,8 +444,8 @@ void loop()
       }
 
       // Check for a GPS time glitch
-      // Stay in wait_for_next_pass if secsRemaining < -10
-      if (secsRemaining < -10)
+      // Stay in wait_for_next_pass if secsRemaining < -15
+      if (secsRemaining < -15)
       {
         Serial.println(F("GPS time glitch? Ignoring..."));
       }
@@ -575,6 +579,8 @@ void loop()
         if (remainingTransmits > 0) // Are we done?
         {
           nextTransmitTime += repetitionPeriod;
+          nextTransmitTimeActual = nextTransmitTime + random((-0.1 * repetitionPeriod), (0.1 * repetitionPeriod));
+          nextTransmitTimeActual -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
           loop_step = wait_for_next_pass; // Wait for next transmit
         }
         else

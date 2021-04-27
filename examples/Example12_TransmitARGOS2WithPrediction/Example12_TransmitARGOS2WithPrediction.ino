@@ -89,7 +89,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 3 2021  3 20 22 13 20  6891.128  97.4638  112.834  -23.752   95.0077  -3.25 MA A 5 3 0 2021  3 20 23 31 29  7195.551  98.4842  311.143  -25.341  101.3589   0.00 MB 9 3 0 0 2021  3 20 23  4 55  7195.639  98.6902  336.327  -25.340  101.3602   0.00 MC B 7 3 0 2021  3 20 22 17 46  7195.561  98.6978  348.552  -25.340  101.3585   0.00 15 5 0 0 0 2021  3 20 23  0 53  7180.317  98.6912  305.318  -25.259  101.0371  -0.73 18 8 0 0 0 2021  3 20 21 47 11  7225.823  99.0037  358.943  -25.498  101.9968  -0.94 19 C 6 0 0 2021  3 20 22 24  9  7226.338  99.1900  303.709  -25.499  102.0072  -0.42 SR D 4 3 0 2021  3 20 22 26  8  7160.123  98.5438  112.102  -25.153  100.6123  -0.23";
+const char AOP[] =      " A1 6 0 0 3 2021  4 26 22 32  3  6890.985  97.4645  108.117  -23.751   95.0047  -3.68 MA A 5 3 0 2021  4 26 22 24 55  7195.569  98.4768  326.878  -25.341  101.3593   0.00 MB 9 3 0 0 2021  4 26 21 58 17  7195.657  98.7194  352.941  -25.340  101.3605   0.00 MC B 7 3 0 2021  4 26 22 52 44  7195.544  98.6906  339.785  -25.339  101.3582   0.00 15 5 0 0 0 2021  4 26 22 27 40  7180.367  98.6846  313.850  -25.259  101.0382  -0.99 18 8 0 0 0 2021  4 26 22 51 23  7225.742  98.9985  343.598  -25.497  101.9951  -0.93 19 C 6 0 0 2021  4 26 21 51 19  7226.285  99.1854  313.382  -25.499  102.0060  -0.47 SR D 4 3 0 2021  4 26 23 10 57  7160.192  98.5428  100.879  -25.153  100.6137  -0.23";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -133,7 +133,9 @@ enum {
 } loop_steps;
 int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
 
-uint32_t nextTransmitTime; // Time of the next satellite transmission
+// AS3-SP-516-2098-CNES specifies a ±10% 'jitter' on the repetition period to reduce the risk of transmission collisions
+uint32_t nextTransmitTime; // Time of the next satellite transmission (before jitter is added)
+uint32_t nextTransmitTimeActual; // Actual time of the next satellite transmission (including jitter)
 uint8_t remainingTransmits; // Remaining number of satellite transmits
 boolean firstTransmit; // Flag to indicate if this is the first transmission on this satellite pass
 float lat_tx; // The latitude included in the transmitted message
@@ -340,10 +342,11 @@ void loop()
       if (numberTransmits >= 1)
       {
         nextTransmitTime = nextSatellitePass - (((numberTransmits - 1) / 2) * repetitionPeriod);
-        nextTransmitTime -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
+        nextTransmitTimeActual = nextTransmitTime + random((-0.1 * repetitionPeriod), (0.1 * repetitionPeriod));
+        nextTransmitTimeActual -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
         remainingTransmits = numberTransmits; // Remaining number of satellite transmits
 
-        //nextTransmitTime = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
+        //nextTransmitTimeActual = epochNow + 10; // Uncomment this line if you want to test Tx as soon as possible
       }
       else
       {
@@ -356,6 +359,7 @@ void loop()
       while ((remainingTransmits > 0) && (nextTransmitTime < epochNow))
       {
         nextTransmitTime += repetitionPeriod;
+        nextTransmitTimeActual = nextTransmitTime; // Do not subtract the jitter or tcxoWarmup as we do not want the next transmit to be in the past
         remainingTransmits--;
       }
 
@@ -364,7 +368,7 @@ void loop()
         Serial.print(F("Transmit attempt 1 of "));
         Serial.print(remainingTransmits);
         Serial.print(F(" will take place at: "));
-        Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTime));
+        Serial.print(myARTIC.convertEpochToDateTime(nextTransmitTimeActual));
         Serial.println(F(" UTC"));
 
         firstTransmit = true; // Set the firstTransmit flag
@@ -390,7 +394,7 @@ void loop()
       uint32_t epochNow = myARTIC.convertGPSTimeToEpoch(myGPS.getYear(), myGPS.getMonth(), myGPS.getDay(), myGPS.getHour(), myGPS.getMinute(), myGPS.getSecond()); // Convert GPS date & time to epoch
 
       // Calculate how many seconds remain until the next transmit
-      int32_t secsRemaining = (int32_t)nextTransmitTime - (int32_t)epochNow;
+      int32_t secsRemaining = (int32_t)nextTransmitTimeActual - (int32_t)epochNow;
 
       // Count down in intervals of 100, then 10, then 1 second
       if (((secsRemaining >= 100) && (secsRemaining % 100 == 0)) ||
@@ -407,8 +411,8 @@ void loop()
       }
 
       // Check for a GPS time glitch
-      // Stay in wait_for_next_pass if secsRemaining < -10
-      if (secsRemaining < -10)
+      // Stay in wait_for_next_pass if secsRemaining < -15
+      if (secsRemaining < -15)
       {
         Serial.println(F("GPS time glitch? Ignoring..."));
       }
@@ -542,6 +546,8 @@ void loop()
         if (remainingTransmits > 0) // Are we done?
         {
           nextTransmitTime += repetitionPeriod;
+          nextTransmitTimeActual = nextTransmitTime + random((-0.1 * repetitionPeriod), (0.1 * repetitionPeriod));
+          nextTransmitTimeActual -= tcxoWarmupTime; // Start the transmit early to compensate for the TCXO warmup time
           loop_step = wait_for_next_pass; // Wait for next transmit
         }
         else
