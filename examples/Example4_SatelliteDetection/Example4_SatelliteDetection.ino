@@ -2,7 +2,7 @@
   Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: March 21st 2021
+  Date: June 8th 2021
 
   This example:
     begins (initializes) the ARTIC;
@@ -89,6 +89,22 @@ void setup()
 
   Serial.println(F("ARTIC R2 boot was successful."));
   Serial.println();
+
+  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
+  // earlier versions of the board will need to use version 1.0.9 of the library.
+  uint32_t platformID = myARTIC.readPlatformID();
+  if (platformID == 0)
+  {
+    Serial.println(F("You appear to have an early version of the SparkFun board."));
+    Serial.println(F("For the transmit examples, you will need to use the Library Manager to select version 1.0.9 of this library."));
+  }
+  else
+  {
+    Serial.print(F("Your Platform ID is: 0x"));
+    Serial.println(platformID, HEX);
+  }
 
   // Read and print the ARTIC R2 firmware status
   ARTIC_R2_Firmware_Status status;

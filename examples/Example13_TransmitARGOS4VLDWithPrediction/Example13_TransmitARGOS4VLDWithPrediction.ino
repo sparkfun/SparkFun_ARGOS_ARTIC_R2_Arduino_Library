@@ -2,7 +2,7 @@
   Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: March 21st 2021
+  Date: June 8th 2021
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -78,9 +78,7 @@
 
 //#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
-// CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
-// E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
-const uint32_t PLATFORM_ID = 0x01234567; // Update this with your Platform ID
+// From v1.1.0 of the library, the platform ID is stored in PMEM
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
@@ -92,7 +90,7 @@ const uint8_t numARGOSsatellites = 1; // Change this if required to match the nu
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // At the time of writing, only ANGELS A1 supports ARGOS-4
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04";
-const char AOP[] =      " A1 6 0 0 3 2021  4 26 22 32  3  6890.985  97.4645  108.117  -23.751   95.0047  -3.68";
+const char AOP[] =      " A1 6 0 0 3 2021  6  7 23  9 29  6890.912  97.4647   98.723  -23.751   95.0032  -3.52";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -187,6 +185,25 @@ void setup()
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)
       ; // Do nothing more
+  }
+
+  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
+  // earlier versions of the board will need to use version 1.0.9 of the library.
+  uint32_t platformID = myARTIC.readPlatformID();
+  if (platformID == 0)
+  {
+    Serial.println(F("You appear to have an early version of the SparkFun board."));
+    Serial.println(F("Please use the Library Manager to select version 1.0.9 of this library."));
+    Serial.println(F("Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
+  else
+  {
+    Serial.print(F("Your Platform ID is: 0x"));
+    Serial.println(platformID, HEX);
   }
 }
 
@@ -480,7 +497,8 @@ void loop()
         Serial.println();
 
         // Configure the Tx payload for ARGOS 4 VLD using our platform ID and the latest lat/lon
-        if (myARTIC.setPayloadARGOS4VLDLatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
+        // From v1.1.0 the Platform ID is stored in PMEM
+        if (myARTIC.setPayloadARGOS4VLDLatLon(lat_tx, lon_tx) == false)
         {
           Serial.println(F("setPayloadARGOS4VLDLatLon failed!"));
           Serial.println();

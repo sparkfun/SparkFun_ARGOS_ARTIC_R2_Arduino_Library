@@ -2,7 +2,7 @@
   Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: March 21st 2021
+  Date: June 8th 2021
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -33,7 +33,7 @@
 
   The transmit power can be reduced by 8dB by uncommenting the line: myARTIC.attenuateTXgain(true);
 
-  The ARGOS A4 VLD Short message contains only the 28-bit platform ID. Please change PLATFORM_ID below to your ID.
+  The ARGOS A4 VLD Short message contains only the 28-bit platform ID
 
   Please log in to ARGOS Web https://argos-system.cls.fr/argos-cwi2/login.html
   and copy and paste the latest Satellite AOP (Adapted Orbit Parameters)
@@ -73,11 +73,7 @@
 
 //#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
-// CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
-// E.g.: if your Platform ID is 01:23:45:67 then set PLATFORM_ID to 0x01234567
-// (This is the example used in A4-SS-TER-SP-0079-CNES)
-// (The complete over-air data stream, including sync pattern and length, should be: 0xAC53531C651CECA2F followed by 0b011)
-const uint32_t PLATFORM_ID = 0x01234567; // Update this with your Platform ID
+// From v1.1.0 of the library, the platform ID is stored in PMEM
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
@@ -182,6 +178,25 @@ void setup()
     while (1)
       ; // Do nothing more
   }
+
+  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
+  // earlier versions of the board will need to use version 1.0.9 of the library.
+  uint32_t platformID = myARTIC.readPlatformID();
+  if (platformID == 0)
+  {
+    Serial.println(F("You appear to have an early version of the SparkFun board."));
+    Serial.println(F("Please use the Library Manager to select version 1.0.9 of this library."));
+    Serial.println(F("Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
+  else
+  {
+    Serial.print(F("Your Platform ID is: 0x"));
+    Serial.println(platformID, HEX);
+  }
 }
 
 void loop()
@@ -264,7 +279,8 @@ void loop()
       Serial.println(F(" seconds."));
 
       // Configure the Tx payload for ARGOS A4 VLD Short using our platform ID and 0 bits of user data
-      if (myARTIC.setPayloadARGOS4VLDshort(PLATFORM_ID) == false)
+      // From v1.1.0 the Platform ID is stored in PMEM
+      if (myARTIC.setPayloadARGOS4VLDshort() == false)
       {
         Serial.println(F("setPayloadARGOS4VLDshort failed! Freezing..."));
         while (1)

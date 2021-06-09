@@ -17,6 +17,7 @@ const uint32_t ARTIC_R2_YMEM_CHECKSUM = 0x65CC81; // ARTIC006
 
 // P Memory Locations
 const uint16_t MEM_LOC_FIRMWARE_VERSION = 0x0010; // 2 * 32-bit words = 8 bytes: 'ARTICnnn'
+const uint16_t MEM_LOC_PLATFORM_ID = 10239; // Platform ID is stored in the 28 least significant bits of the final PMEM location
 
 // X Memory locations
 const uint16_t MEM_LOC_ARGOS_CONFIGURATION = 0x137E; // Size 1. Read only (Was 0x0384 in ARTIC004)

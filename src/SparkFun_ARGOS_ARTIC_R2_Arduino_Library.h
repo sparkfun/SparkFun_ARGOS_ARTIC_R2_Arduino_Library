@@ -544,6 +544,7 @@ public:
 	boolean clearInterrupts(uint8_t interrupts = 3); // Clear one or both interrupts. Default to both.
 
 	void readFirmwareVersion(char *buffer); // Read the firmware version from PMEM
+	uint32_t readPlatformID(); // From v1.1.0: read the Platform ID from the final PMEM location
 	void readMemoryCRC(uint32_t *PMEM_CRC, uint32_t *XMEM_CRC, uint32_t *YMEM_CRC); // Read the memories CRCs (after firmware boot)
 
 	boolean setRxTimeout(uint32_t timeout_secs = 0x0A); // Set the RX timeout (seconds). Default to 10.
@@ -585,26 +586,26 @@ public:
 	boolean readDownlinkMessage(Downlink_Message *downlinkMessage); // Read a downlink message from the RX payload buffer
 
 	// Helper functions to assemble the different message payloads
-	boolean setPayloadARGOS3ZE(uint32_t platformID); // Set the Tx payload for a ARGOS 3 ZE message
-	boolean setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
-	boolean setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
-	boolean setPayloadARGOS4VLDshort(uint32_t platformID); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
-	boolean setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon); // Set the Tx payload for a ARGOS 4 VLD message containing GPS lat & lon in a compact form which ARGOS Web understands
-	boolean setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1, uint32_t payload2); // Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
+	boolean setPayloadARGOS3ZE(); // Set the Tx payload for a ARGOS 3 ZE message
+	boolean setPayloadARGOS3LatLon(float Lat, float Lon); // Set the Tx payload for a ARGOS 3 PTT-A3 message containing GPS lat & lon in a compact form which ARGOS Web understands
+	boolean setPayloadARGOS2LatLon(float Lat, float Lon); // Set the Tx payload for a ARGOS PTT-A2 message containing GPS lat & lon in a compact form which ARGOS Web understands
+	boolean setPayloadARGOS4VLDshort(); // Set the Tx payload for a ARGOS 4 VLD message with 0 bits of user data
+	boolean setPayloadARGOS4VLDLatLon(float Lat, float Lon); // Set the Tx payload for a ARGOS 4 VLD message containing GPS lat & lon in a compact form which ARGOS Web understands
+	boolean setPayloadARGOS4VLDLong(uint32_t payload1, uint32_t payload2); // Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
 
 	// Set the Tx payload for a ARGOS PTT-A2 message containing Nx32_bits * 32 bit words (1<=N<=8)
 	// Special note:
 	//   Because the platform ID is 28 bits (not 20), only the 24 least-significant bits of the first payload uint32_t are used.
 	//   The 8 most-significant bits of the first payload uint32_t are ignored.
 	//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
-	boolean setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload);
+	boolean setPayloadARGOS2(uint8_t Nx32_bits, uint32_t *payload);
 
 	// Set the Tx payload for a ARGOS PTT-A3 message containing Nx32_bits * 32 bit words (1<=N<=8)
 	// Special note:
 	//   Only the 24 least-significant bits of the first payload uint32_t are used.
 	//   The 8 most-significant bits of the first payload uint32_t are ignored.
 	//   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
-	boolean setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload);
+	boolean setPayloadARGOS3(uint8_t Nx32_bits, uint32_t *payload);
 
 	// Storage for message transmission
 	// This storage is used by the setPayloadARGOS functions
@@ -663,6 +664,10 @@ private:
 	// instructionInProgress will be ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS when the ARTIC is idle.
 	// It will be set to one of the INST_ states by sendMCUinstruction.
 	uint8_t _instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS;
+
+	// From v1.1.0: the Platform ID is programmed by SparkFun into the last PMEM location during production testing
+	// In .begin, the Platform ID is read from PMEM and stored here:
+	uint32_t _platformID = 0; // Default to zero as that is what will be read from memory on earlier SparkFun boards
 
 	//Functions
 	boolean beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort);

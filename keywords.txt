@@ -30,6 +30,7 @@ checkMCUinstructionProgress	KEYWORD2
 printInstructionProgress	KEYWORD2
 clearInterrupts	KEYWORD2
 readFirmwareVersion	KEYWORD2
+readPlatformID	KEYWORD2
 readMemoryCRC	KEYWORD2
 setRxTimeout	KEYWORD2
 setSatelliteDetectionTimeout	KEYWORD2
