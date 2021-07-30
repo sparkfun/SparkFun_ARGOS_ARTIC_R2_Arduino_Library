@@ -37,11 +37,21 @@
 
 #include <SPI.h> // Needed for SPI communication
 
+#include <Wire.h> // Needed for I2C communication with the PCA9536 on the smôl ARTIC R2
+
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 //#define ARTIC_R2_UPLOAD_FIRMWARE // Uncomment this line to configure the ARTIC R2 firmware via SPI, instead of booting from flash memory
 
 #include "ARTIC_R2_Firmware.h" // This file defines the firmware parameter memory locations. The locations for ARTIC004 and ARTIC006 are very different!
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+typedef enum {
+	ARTIC_R2_BOARD_SHIELD = 0, // The original Shield / Breakout
+	ARTIC_R2_BOARD_IOTA,
+	ARTIC_R2_BOARD_SMOL
+} ARTIC_R2_Board_Type_e;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -519,6 +529,7 @@ public:
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
 	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 	boolean beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
+	boolean beginSmol(int user_CSPin, int user_ARTICPWRENPin, TwoWire &wirePort = Wire);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -655,6 +666,8 @@ private:
 	int _int2; // ARTIC R2 Interrupt 2 pin
 	int _gain8 = -1; // Pull this pin high to use the full transmit power
 
+    TwoWire *_i2cPort; //Connection to the PCA9536 on the smôl ARTIC R2
+
 	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
 	// This allows some time for the internal memory access block to retrieve the first data sample.
 	// Default value is 24 * 1/3000000 = 8 microseconds
@@ -670,7 +683,7 @@ private:
 	uint32_t _platformID = 0; // Default to zero as that is what will be read from memory on earlier SparkFun boards
 
 	//Functions
-	boolean beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort);
+	boolean beginInternal(ARTIC_R2_Board_Type_e board, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort);
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Read multiple words using burst mode. configureBurstmodeRegister must have been called first.
 	void write24BitWord(uint32_t word); // Write a single 24-bit word using burst mode. configureBurstmodeRegister must have been called first.
@@ -698,6 +711,19 @@ private:
 	void print_sat(orbitParameters *p_po, int number_sat);
 	int satellitePassPrediction(configurationParameters *p_pc, orbitParameters *p_po, predictionParameters *p_pp, int number_sat);
 	float textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP);
+
+	// smôl specifics
+	#define PCA9536_I2C_ADDRESS 0x41
+	#define PCA9536_INPUT_PORT 0x00
+	#define PCA9536_OUTPUT_PORT 0x01
+	#define PCA9536_CONFIGURATION_REGISTER 0x03
+	boolean beginPCA9536(TwoWire &wirePort = Wire);
+	boolean setSmolG8(byte highLow);     // Gain8  = PCA9536 GPIO3
+	boolean setSmolBOOT(byte highLow);   // BOOT   = PCA9536 GPIO2
+	byte getSmolINT1();                  // INT1   = PCA9536 GPIO1
+	boolean setSmolRESETB(byte highLow); // RESETB = PCA9536 GPIO0
+	boolean setPCA9536Output(byte highLow, byte GPIO);
+
 };
 
 #endif
