@@ -71,6 +71,22 @@ boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned lon
 
 boolean ARTIC_R2::beginInternal()
 {
+/*
+	A note about the smôl pins:
+	On smôl, the ARTIC RESETB, BOOT and INT1 pins are connected to a PCA9536 I2C GPIO expander.
+	So is the G8 (Gain 8dB) signal.
+	The PCA9536 is only powered when the ARTIC power is enabled. So we need to wait until power
+	for the ARTIC has been enabled before we can configure those pins.
+	When the ARTIC power is first enabled, all four GPIO pins on the PCA9536 will be configured
+	as inputs with weak pull-ups. This is OK because:
+	- RESETB has its own pull-up to VDD and we do not want to hold the ARTIC in reset while the
+	  power is enabled (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence).
+	- INT1 requires an input anyway.
+	- BOOT has its own pull-up - making the ARTIC boot from flash memory
+	- G8 is connected to an opto-isolator. The weak pull-up won't be enough to enable the LED
+	  in the isolator. The RF Amp will default to using reduced gain as its G8 pin has a pull-
+	  down resistor connected to it.
+*/
 	if (_printDebug == true)
 		_debugPort->println(F("begin: ARTIC is starting..."));
 
@@ -87,34 +103,52 @@ boolean ARTIC_R2::beginInternal()
 	pinMode(_artic_pwr_en, OUTPUT);
 	disableARTICpower();
 
-	// Configure the GPIO pins as outputs/input on smôl
-	if (_board == ARTIC_R2_BOARD_SMOL)
-		beginPCA9536();
-
 	disableRFpower();
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
-
-	configureBootPin();
-
-	setRESETBPin(HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
 
 	if (_int1 >= 0)
 		pinMode(_int1, INPUT_PULLUP);
 	if (_int2 >= 0)
 		pinMode(_int2, INPUT_PULLUP);
 
-	if (attenuateTXgain(true)) // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
-		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
+	if (_board < ARTIC_R2_BOARD_SMOL)
+	{
+		configureBootPin();
+		setRESETBPin(HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+		attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
+	}
 
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Make sure the power has been turned off for at least ARTIC_R2_POWER_ON_DELAY_MS
 
 	enableARTICpower(); // Enable power for the ARTIC R2
+	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Short delay before we attempt to configure the smôl pins
+
+	// Now we can configure the GPIO pins as outputs/input on smôl
+	if (!configureBootPin())
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: configureBootPin failed!"));
+	}
+	attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
+	if (_board == ARTIC_R2_BOARD_SMOL)
+	{
+		if (!beginPCA9536())
+		{
+			if (_printDebug == true)
+				_debugPort->println(F("begin: beginPCA9536 failed!"));
+		}
+	}
+
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_POWER_ON_DELAY_MS
 
 	//Now reset the ARTIC (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-	setRESETBPin(LOW);
+	if (!setRESETBPin(LOW))
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: setRESETBPin (1) failed!"));
+	}
 
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
@@ -126,7 +160,11 @@ boolean ARTIC_R2::beginInternal()
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 
 	//Now bring the ARTIC out of reset (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-	setRESETBPin(HIGH);
+	if (!setRESETBPin(HIGH))
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: setRESETBPin (2) failed!"));
+	}
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
 	if (_printDebug == true)
@@ -223,7 +261,7 @@ boolean ARTIC_R2::beginInternal()
 	if (_printDebug == true)
 		_debugPort->println(F("begin: uploading ARTIC firmware to XMEM..."));
 
-	burstmode; // Prepare the burstmode register configuration
+	// Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
@@ -261,7 +299,7 @@ boolean ARTIC_R2::beginInternal()
 	if (_printDebug == true)
 		_debugPort->println(F("begin: uploading ARTIC firmware to YMEM..."));
 
-	burstmode; // Prepare the burstmode register configuration
+	// Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
@@ -314,8 +352,7 @@ boolean ARTIC_R2::beginInternal()
 
 	unsigned long bootStartTime = millis();
 
-	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT_MS)
-			&& ((board == ARTIC_R2_BOARD_SMOL) ? digitalRead(_int1) == LOW : getSmolINT1() == LOW))
+	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT_MS) && (getINT1() == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: waiting for the ARTIC to boot (checking if INT1 has gone high)..."));
@@ -476,7 +513,7 @@ boolean ARTIC_R2::attenuateTXgain(boolean attenuate)
 		setSmolG8(attenuate ? LOW : HIGH);
 		if (_printDebug == true)
 		{
-			_debugPort->println(F("attenuateTXgain: attenuation "));
+			_debugPort->print(F("attenuateTXgain: attenuation "));
 			if (attenuate)
 				_debugPort->println(F("enabled. Transmitting at reduced gain"));
 			else
@@ -4253,28 +4290,50 @@ boolean ARTIC_R2::beginPCA9536()
 	// PCA9536 GPIO2 = BOOT (Output)
 	// PCA9536 GPIO3 = G8 (Output)
 
+	boolean result = true;
+
+	// Get ready to pull the G8 pin low when it is changed to an output
+	result &= setSmolG8(LOW);
+
+	// Read
 	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
 	_i2cPort->write(SMOL_PCA9536_CONFIGURATION_REGISTER);
-	_i2cPort->write(0xF2); // Configure: GPIO1 as an input for INT1; GPIO0/2/3 as outputs
-	return (_i2cPort->endTransmission() == 0);
+	result &= (_i2cPort->endTransmission(false) == 0); // Restart
+
+    uint8_t bytesReturned = _i2cPort->requestFrom(SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
+    if (bytesReturned != 1)
+        return (false);
+    uint8_t incomingByte = _i2cPort->read();
+
+	// Modify
+	incomingByte |= 0x02; // Configure GPIO1 as an input for INT1
+	incomingByte &= ~(0x0D); // Configure GPIO0/2/3 as outputs
+
+	// Write
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_CONFIGURATION_REGISTER);
+	_i2cPort->write(incomingByte);
+	result &= (_i2cPort->endTransmission() == 0); // Stop
+
+	return (result);
 }
 
-boolean ARTIC_R2::setSmolG8(byte highLow)
+boolean ARTIC_R2::setSmolG8(uint8_t highLow)
 {
 	return (setPCA9536Output(highLow, 3));
 }
 
-boolean ARTIC_R2::setSmolBOOT(byte highLow)
+boolean ARTIC_R2::setSmolBOOT(uint8_t highLow)
 {
 	return (setPCA9536Output(highLow, 2));
 }
 
-boolean ARTIC_R2::setSmolRESETB(byte highLow)
+boolean ARTIC_R2::setSmolRESETB(uint8_t highLow)
 {
 	return (setPCA9536Output(highLow, 0));
 }
 
-boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
+boolean ARTIC_R2::setPCA9536Output(uint8_t highLow, uint8_t GPIO)
 {
 	boolean result = true;
 
@@ -4283,10 +4342,10 @@ boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
 	_i2cPort->write(SMOL_PCA9536_OUTPUT_PORT);
 	result &= (_i2cPort->endTransmission(false) == 0); // Restart
 
-    byte bytesReturned = _i2cPort->requestFrom((byte)SMOL_PCA9536_I2C_ADDRESS, (byte)1);
+    uint8_t bytesReturned = _i2cPort->requestFrom(SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
     if (bytesReturned != 1)
         return (false);
-    byte incomingByte = _i2cPort->read();
+    uint8_t incomingByte = _i2cPort->read();
 
 	// Modify
 	if (highLow)
@@ -4303,24 +4362,24 @@ boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
 	return (result);
 }
 
-byte ARTIC_R2::getSmolINT1()
+uint8_t ARTIC_R2::getSmolINT1()
 {
-	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
-	_i2cPort->write(SMOL_PCA9536_INPUT_PORT);
+	_i2cPort->beginTransmission((uint8_t)SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write((uint8_t)SMOL_PCA9536_INPUT_PORT);
 	if (_i2cPort->endTransmission(false) != 0) // Restart
 		return (LOW); // I2C Error - show INT1 as low
 
-    byte bytesReturned = _i2cPort->requestFrom((byte)SMOL_PCA9536_I2C_ADDRESS, (byte)1);
+    uint8_t bytesReturned = _i2cPort->requestFrom((uint8_t)SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
     if (bytesReturned != 1)
         return (LOW); // I2C Error - show INT1 as low
-    byte incomingByte = _i2cPort->read();
+    uint8_t incomingByte = _i2cPort->read();
 
 	return ((incomingByte & 0x02) >> 1);
 }
 
 // The ARTIC will boot from the [onboard] external flash memory when the boot pin is high and reset is released.
 // If the boot pin is held low at reset the ARTIC will wait for the MCU to upload the Firmware.
-void ARTIC_R2::configureBootPin()
+boolean ARTIC_R2::configureBootPin()
 {
 	if (_board < ARTIC_R2_BOARD_SMOL)
 	{
@@ -4332,19 +4391,21 @@ void ARTIC_R2::configureBootPin()
 #else
 			digitalWrite(_boot, HIGH); // Boot the ARTIC from flash memory
 #endif
+			return (true);
 		}
+		return (false);
 	}
 	else // smôl
 	{
 #ifdef ARTIC_R2_UPLOAD_FIRMWARE
-			setSmolBOOT(LOW); // Get ready to upload the firmware
+			return (setSmolBOOT(LOW)); // Get ready to upload the firmware
 #else
-			setSmolBOOT(HIGH); // Boot the ARTIC from flash memory
+			return (setSmolBOOT(HIGH)); // Boot the ARTIC from flash memory
 #endif
 	}
 }
 
-void ARTIC_R2::setRESETBPin(byte highLow)
+boolean ARTIC_R2::setRESETBPin(uint8_t highLow)
 {
 	if (_board < ARTIC_R2_BOARD_SMOL)
 	{
@@ -4352,15 +4413,17 @@ void ARTIC_R2::setRESETBPin(byte highLow)
 		{
 			pinMode(_rst, OUTPUT);
 			digitalWrite(_rst, highLow);
+			return (true);
 		}
+		return (false);
 	}
 	else
 	{
-		setSmolRESETB(highLow);
+		return (setSmolRESETB(highLow));
 	}
 }
 
-boolean ARTIC_R2::getINT1()
+uint8_t ARTIC_R2::getINT1()
 {
 	if (_board < ARTIC_R2_BOARD_SMOL)
 		return (digitalRead(_int1));

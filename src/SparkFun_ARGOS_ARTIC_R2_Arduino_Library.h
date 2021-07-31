@@ -716,21 +716,21 @@ private:
 	float textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP);
 
 	// smôl specifics
-	#define SMOL_PCA9536_I2C_ADDRESS 0x41
-	#define SMOL_PCA9536_INPUT_PORT 0x00
-	#define SMOL_PCA9536_OUTPUT_PORT 0x01
-	#define SMOL_PCA9536_CONFIGURATION_REGISTER 0x03
+	const uint8_t SMOL_PCA9536_I2C_ADDRESS = 0x41;
+	const uint8_t SMOL_PCA9536_INPUT_PORT = 0x00;
+	const uint8_t SMOL_PCA9536_OUTPUT_PORT = 0x01;
+	const uint8_t SMOL_PCA9536_CONFIGURATION_REGISTER = 0x03;
 	boolean beginPCA9536();
-	boolean setSmolG8(byte highLow);     // Gain8  = PCA9536 GPIO3
-	boolean setSmolBOOT(byte highLow);   // BOOT   = PCA9536 GPIO2
-	byte getSmolINT1();                  // INT1   = PCA9536 GPIO1
-	boolean setSmolRESETB(byte highLow); // RESETB = PCA9536 GPIO0
-	boolean setPCA9536Output(byte highLow, byte GPIO);
+	boolean setSmolG8(uint8_t highLow);     // Gain8  = PCA9536 GPIO3
+	boolean setSmolBOOT(uint8_t highLow);   // BOOT   = PCA9536 GPIO2
+	uint8_t getSmolINT1();               // INT1   = PCA9536 GPIO1
+	boolean setSmolRESETB(uint8_t highLow); // RESETB = PCA9536 GPIO0
+	boolean setPCA9536Output(uint8_t highLow, uint8_t GPIO);
 
 	// GPIO helper functions
-	void configureBootPin();
-	void setRESETBPin(byte highLow);
-	boolean getINT1();
+	boolean configureBootPin();
+	boolean setRESETBPin(uint8_t highLow);
+	uint8_t getINT1();
 };
 
 #endif
