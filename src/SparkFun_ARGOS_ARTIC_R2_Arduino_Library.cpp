@@ -28,105 +28,85 @@
 
 boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
 {
-	return (beginInternal(ARTIC_R2_BOARD_SHIELD, user_CSPin, user_RSTPin, user_BOOTPin, user_ARTICPWRENPin, user_RFPWRENPin, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort, NULL));
-}
-
-boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
-{
-	return (beginInternal(ARTIC_R2_BOARD_IOTA, user_CSPin, user_RSTPin, user_BOOTPin, user_IOTAPWRENPin, -1, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort, NULL));
-}
-
-boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, TwoWire &wirePort = Wire)
-{
-	return (beginInternal(ARTIC_R2_BOARD_SMOL, user_CSPin, -1, -1, user_ARTICPWRENPin, -1, -1, -1, -1, 1000000, NULL, wirePort));
-}
-
-boolean ARTIC_R2::beginInternal(ARTIC_R2_Board_Type_e board, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort)
-{
-	if (_printDebug == true)
-		_debugPort->println(F("begin: ARTIC is starting..."));
-
-	//Get user settings
-	if (board < ARTIC_R2_BOARD_SMOL)
-		_spiPort = &spiPort;
-	_spiPortSpeed = spiPortSpeed;
-	if (_spiPortSpeed > 5000000)
-		_spiPortSpeed = 5000000; //Datasheet indicates max speed is 5MHz for P memory writes
-
-	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay based on the clock speed
-	_delay24cycles++; // Round up by 1
-
-	if (board == ARTIC_R2_BOARD_SMOL)
-		_i2cPort = &wirePort;
-
-	_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Clear _instructionInProgress
-
-	// Pins
+	_board = ARTIC_R2_BOARD_SHIELD;
 	_cs = user_CSPin;
-	_boot = user_BOOTPin;
 	_rst = user_RSTPin;
+	_boot = user_BOOTPin;
 	_artic_pwr_en = user_ARTICPWRENPin;
 	_rf_pwr_en = user_RFPWRENPin;
 	_int1 = user_INT1Pin;
 	_int2 = user_INT2Pin;
-	_gain8 = user_GAIN8Pin;
+	_gain8 = user_GAIN8Pin; // Defaults to -1
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	return (beginInternal());
+}
+
+boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
+{
+	_board = ARTIC_R2_BOARD_IOTA;
+	_cs = user_CSPin;
+	_rst = user_RSTPin;
+	_boot = user_BOOTPin;
+	_artic_pwr_en = user_IOTAPWRENPin;
+	_rf_pwr_en = -1; // IOTA does not have a separate RF enable
+	_int1 = user_INT1Pin;
+	_int2 = user_INT2Pin;
+	_gain8 = user_GAIN8Pin; // Defaults to -1
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	return (beginInternal());
+}
+
+boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort)
+{
+	_board = ARTIC_R2_BOARD_SMOL;
+	_cs = user_CSPin;
+	_artic_pwr_en = user_ARTICPWRENPin;
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	_i2cPort = &wirePort; // Defaults to Wire
+	return (beginInternal());
+}
+
+boolean ARTIC_R2::beginInternal()
+{
+	if (_printDebug == true)
+		_debugPort->println(F("begin: ARTIC is starting..."));
+
+	//Check user settings
+	if (_spiPortSpeed > 5000000)
+		_spiPortSpeed = 5000000; //Datasheet indicates max speed is 5MHz for P memory writes
+
+	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay in microseconds based on the clock speed
+	_delay24cycles++; // Round up by 1
+
+	_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Clear _instructionInProgress
 
 	// Disable the power until we have configured the rest of the IO pins
 	pinMode(_artic_pwr_en, OUTPUT);
 	disableARTICpower();
 
-	if (_rf_pwr_en >= 0)
-	{
-		pinMode(_rf_pwr_en, OUTPUT);
-		disableRFpower();
-	}
+	// Configure the GPIO pins as outputs/input on smôl
+	if (_board == ARTIC_R2_BOARD_SMOL)
+		beginPCA9536();
+
+	disableRFpower();
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
 
-	if (_boot >= 0)
-	{
-		pinMode(_boot, OUTPUT);
+	configureBootPin();
 
-		// The ARTIC will boot from the [onboard] external flash memory when the boot pin is high and reset is released.
-		// If the boot pin is held low at reset the ARTIC will wait for the MCU to upload the Firmware.
-#ifdef ARTIC_R2_UPLOAD_FIRMWARE
-		digitalWrite(_boot, LOW); // Get ready to upload the firmware
-#else
-		digitalWrite(_boot, HIGH); // Boot the ARTIC from flash memory
-#endif
-	}
-
-	if (_rst >= 0)
-	{
-		pinMode(_rst, OUTPUT);
-		digitalWrite(_rst, HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-	}
+	setRESETBPin(HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
 
 	if (_int1 >= 0)
 		pinMode(_int1, INPUT_PULLUP);
 	if (_int2 >= 0)
 		pinMode(_int2, INPUT_PULLUP);
 
-	if (_gain8 >= 0) // Set the RF TX gain the pin is defined
-	{
-		pinMode(_gain8, OUTPUT);
-		attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
+	if (attenuateTXgain(true)) // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
-
-	if (board == ARTIC_R2_BOARD_SMOL)
-	{
-		beginPCA9536(_i2cPort); // Configure the PCA9536 if we are using smôl
-		setSmolRESETB(HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-#ifdef ARTIC_R2_UPLOAD_FIRMWARE
-		setSmolBOOT(LOW); // Get ready to upload the firmware
-#else
-		setSmolBOOT(HIGH); // Boot the ARTIC from flash memory
-#endif
-		setSmolG8(LOW); // Minimise gain while the power is turned on
-		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
 
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Make sure the power has been turned off for at least ARTIC_R2_POWER_ON_DELAY_MS
 
@@ -134,36 +114,19 @@ boolean ARTIC_R2::beginInternal(ARTIC_R2_Board_Type_e board, int user_CSPin, int
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_POWER_ON_DELAY_MS
 
 	//Now reset the ARTIC (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-	if (_rst >= 0)
-		digitalWrite(_rst, LOW);
-	else if (board == ARTIC_R2_BOARD_SMOL)
-		setSmolRESETB(LOW);
+	setRESETBPin(LOW);
 
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
-	if (_rf_pwr_en >= 0)
-	{
-		enableRFpower(); // Enable power for the RF amplifier
+	if (enableRFpower()) // Enable power for the RF amplifier
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
 
 	// Now ramp up the TX gain, if the _gain8 pin is defined
-	if (_gain8 >= 0)
-	{
-		attenuateTXgain(false);
+	if (attenuateTXgain(false))
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
-	else if (board == ARTIC_R2_BOARD_SMOL)
-	{
-		setSmolG8(HIGH);
-		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
 
 	//Now bring the ARTIC out of reset (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-	if (_rst >= 0)
-		digitalWrite(_rst, HIGH);
-	else if (board == ARTIC_R2_BOARD_SMOL)
-		setSmolRESETB(HIGH);
+	setRESETBPin(HIGH);
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
 	if (_printDebug == true)
@@ -421,7 +384,7 @@ boolean ARTIC_R2::beginInternal(ARTIC_R2_Board_Type_e board, int user_CSPin, int
 	unsigned long bootStartTime = millis();
 
 	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT_MS)
-			&& ((board == ARTIC_R2_BOARD_SMOL) ? digitalRead(_int1) == LOW : getSmolINT1() == LOW))
+			&& (getINT1() == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: ARTIC is booting from flash (waiting for INT1 to go high)..."));
@@ -480,27 +443,46 @@ void ARTIC_R2::enableDebugging(Stream &debugPort)
 //Returns true if the gain pin has been defined
 boolean ARTIC_R2::attenuateTXgain(boolean attenuate)
 {
-	if (_gain8 >= 0) // Has the G8 pin been defined?
+	if (_board < ARTIC_R2_BOARD_SMOL)
 	{
-		if (attenuate == true)
+		if (_gain8 >= 0) // Has the G8 pin been defined?
 		{
-			digitalWrite(_gain8, LOW);
-			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation enabled. Gain reduced by approx. 5dB"));
+			pinMode(_gain8, OUTPUT);
+			if (attenuate == true)
+			{
+				digitalWrite(_gain8, LOW);
+				if (_printDebug == true)
+					_debugPort->println(F("attenuateTXgain: attenuation enabled. Transmitting at reduced gain"));
+			}
+			else
+			{
+				digitalWrite(_gain8, HIGH);
+				if (_printDebug == true)
+					_debugPort->println(F("attenuateTXgain: attenuation disabled. Transmitting at full power"));
+			}
+			return (true);
 		}
 		else
 		{
-			digitalWrite(_gain8, HIGH);
 			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation disabled. Transmitting at full power"));
+				_debugPort->println(F("attenuateTXgain: _gain8 pin is not defined! Unable to attenuate the gain!"));
+			return (false);
 		}
-		return (true);
 	}
 	else
 	{
+		// On smôl, the G8 pin is low by default which attenuates the gain
+		// If attenuate is false, the pin is pulled high
+		setSmolG8(attenuate ? LOW : HIGH);
 		if (_printDebug == true)
-			_debugPort->println(F("attenuateTXgain: _gain8 pin is not defined! Unable to attenuate the gain!"));
-		return (false);
+		{
+			_debugPort->println(F("attenuateTXgain: attenuation "));
+			if (attenuate)
+				_debugPort->println(F("enabled. Transmitting at reduced gain"));
+			else
+				_debugPort->println(F("disabled. Transmitting at full power"));
+		}
+		return (true);
 	}
 }
 
@@ -517,17 +499,27 @@ void ARTIC_R2::disableARTICpower()
 }
 
 // Enable power for the RF amplifier
-void ARTIC_R2::enableRFpower()
+boolean ARTIC_R2::enableRFpower()
 {
 	if (_rf_pwr_en >= 0)
-		digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout
+	{
+		pinMode(_rf_pwr_en, OUTPUT);
+		digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Shield
+		return (true);
+	}
+	return (false);
 }
 
 // Disable power for the RF amplifier
-void ARTIC_R2::disableRFpower()
+boolean ARTIC_R2::disableRFpower()
 {
 	if (_rf_pwr_en >= 0)
-		digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Breakout
+	{
+		pinMode(_rf_pwr_en, OUTPUT);
+		digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Shield
+		return (true);
+	}
+	return (false);
 }
 
 // Read ARTIC R2 firmware status register
@@ -4254,32 +4246,32 @@ boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 		return false;
 }
 
-boolean ARTIC_R2::beginPCA9536(TwoWire &wirePort)
+boolean ARTIC_R2::beginPCA9536()
 {
 	// PCA9536 GPIO0 = RESETB (Output)
 	// PCA9536 GPIO1 = INT1 (Input)
 	// PCA9536 GPIO2 = BOOT (Output)
 	// PCA9536 GPIO3 = G8 (Output)
 
-	_i2cPort->beginTransmission(PCA9536_I2C_ADDRESS);
-	_i2cPort->write(PCA9536_CONFIGURATION_REGISTER);
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_CONFIGURATION_REGISTER);
 	_i2cPort->write(0xF2); // Configure: GPIO1 as an input for INT1; GPIO0/2/3 as outputs
 	return (_i2cPort->endTransmission() == 0);
 }
 
 boolean ARTIC_R2::setSmolG8(byte highLow)
 {
-	setPCA9536Output(highLow, 3);
+	return (setPCA9536Output(highLow, 3));
 }
 
 boolean ARTIC_R2::setSmolBOOT(byte highLow)
 {
-	setPCA9536Output(highLow, 2);
+	return (setPCA9536Output(highLow, 2));
 }
 
 boolean ARTIC_R2::setSmolRESETB(byte highLow)
 {
-	setPCA9536Output(highLow, 0);
+	return (setPCA9536Output(highLow, 0));
 }
 
 boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
@@ -4287,11 +4279,11 @@ boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
 	boolean result = true;
 
 	// Read
-	_i2cPort->beginTransmission(PCA9536_I2C_ADDRESS);
-	_i2cPort->write(PCA9536_OUTPUT_PORT);
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_OUTPUT_PORT);
 	result &= (_i2cPort->endTransmission(false) == 0); // Restart
 
-    byte bytesReturned = _i2cPort->requestFrom(PCA9536_I2C_ADDRESS, (byte)1);
+    byte bytesReturned = _i2cPort->requestFrom((byte)SMOL_PCA9536_I2C_ADDRESS, (byte)1);
     if (bytesReturned != 1)
         return (false);
     byte incomingByte = _i2cPort->read();
@@ -4303,8 +4295,8 @@ boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
 		incomingByte &= ~(1 << GPIO);
 
 	// Write
-	_i2cPort->beginTransmission(PCA9536_I2C_ADDRESS);
-	_i2cPort->write(PCA9536_OUTPUT_PORT);
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_OUTPUT_PORT);
 	_i2cPort->write(incomingByte);
 	result &= (_i2cPort->endTransmission() == 0); // Stop
 
@@ -4313,15 +4305,65 @@ boolean ARTIC_R2::setPCA9536Output(byte highLow, byte GPIO)
 
 byte ARTIC_R2::getSmolINT1()
 {
-	_i2cPort->beginTransmission(PCA9536_I2C_ADDRESS);
-	_i2cPort->write(PCA9536_INPUT_PORT);
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_INPUT_PORT);
 	if (_i2cPort->endTransmission(false) != 0) // Restart
 		return (LOW); // I2C Error - show INT1 as low
 
-    byte bytesReturned = _i2cPort->requestFrom(PCA9536_I2C_ADDRESS, (byte)1);
+    byte bytesReturned = _i2cPort->requestFrom((byte)SMOL_PCA9536_I2C_ADDRESS, (byte)1);
     if (bytesReturned != 1)
         return (LOW); // I2C Error - show INT1 as low
     byte incomingByte = _i2cPort->read();
 
 	return ((incomingByte & 0x02) >> 1);
+}
+
+// The ARTIC will boot from the [onboard] external flash memory when the boot pin is high and reset is released.
+// If the boot pin is held low at reset the ARTIC will wait for the MCU to upload the Firmware.
+void ARTIC_R2::configureBootPin()
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+	{
+		if (_boot >= 0)
+		{
+			pinMode(_boot, OUTPUT);
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+			digitalWrite(_boot, LOW); // Get ready to upload the firmware
+#else
+			digitalWrite(_boot, HIGH); // Boot the ARTIC from flash memory
+#endif
+		}
+	}
+	else // smôl
+	{
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+			setSmolBOOT(LOW); // Get ready to upload the firmware
+#else
+			setSmolBOOT(HIGH); // Boot the ARTIC from flash memory
+#endif
+	}
+}
+
+void ARTIC_R2::setRESETBPin(byte highLow)
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+	{
+		if (_rst >= 0)
+		{
+			pinMode(_rst, OUTPUT);
+			digitalWrite(_rst, highLow);
+		}
+	}
+	else
+	{
+		setSmolRESETB(highLow);
+	}
+}
+
+boolean ARTIC_R2::getINT1()
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+		return (digitalRead(_int1));
+	else
+		return (getSmolINT1());
 }
