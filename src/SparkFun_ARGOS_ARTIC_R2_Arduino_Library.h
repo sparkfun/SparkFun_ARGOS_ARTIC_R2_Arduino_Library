@@ -651,6 +651,8 @@ public:
 	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
 
 	// GPIO helper functions
+	boolean configureBootPin();
+	boolean setRESETBPin(uint8_t highLow);
 	uint8_t getINT1();
 
 private:
@@ -729,10 +731,6 @@ private:
 	uint8_t getSmolINT1();               // INT1   = PCA9536 GPIO1
 	boolean setSmolRESETB(uint8_t highLow); // RESETB = PCA9536 GPIO0
 	boolean setPCA9536Output(uint8_t highLow, uint8_t GPIO);
-
-	// GPIO helper functions
-	boolean configureBootPin();
-	boolean setRESETBPin(uint8_t highLow);
 };
 
 #endif
