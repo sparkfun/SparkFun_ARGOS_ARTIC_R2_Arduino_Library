@@ -650,6 +650,9 @@ public:
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
 
+	// GPIO helper functions
+	uint8_t getINT1();
+
 private:
 	//Variables
 	ARTIC_R2_Board_Type_e _board;				// Shield, IOTA or smôl
@@ -730,7 +733,6 @@ private:
 	// GPIO helper functions
 	boolean configureBootPin();
 	boolean setRESETBPin(uint8_t highLow);
-	uint8_t getINT1();
 };
 
 #endif
