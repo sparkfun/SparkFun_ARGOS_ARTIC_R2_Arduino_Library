@@ -58,7 +58,7 @@ boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, i
 	return (beginInternal());
 }
 
-boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort)
+boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort, boolean holdAtReset)
 {
 	_board = ARTIC_R2_BOARD_SMOL;
 	_cs = user_CSPin;
@@ -66,10 +66,10 @@ boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned lon
 	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
 	_spiPort = &spiPort; // Defaults to SPI
 	_i2cPort = &wirePort; // Defaults to Wire
-	return (beginInternal());
+	return (beginInternal(holdAtReset));
 }
 
-boolean ARTIC_R2::beginInternal()
+boolean ARTIC_R2::beginInternal(boolean holdAtReset)
 {
 /*
 	A note about the smôl pins:

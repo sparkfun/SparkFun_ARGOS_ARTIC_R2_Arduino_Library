@@ -529,7 +529,7 @@ public:
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
 	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 	boolean beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
-	boolean beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI, TwoWire &wirePort = Wire);
+	boolean beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI, TwoWire &wirePort = Wire, boolean holdAtReset = false);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -694,7 +694,7 @@ private:
 	uint32_t _platformID = 0; // Default to zero as that is what will be read from memory on earlier SparkFun boards
 
 	//Functions
-	boolean beginInternal();
+	boolean beginInternal(boolean holdAtReset = false);
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Read multiple words using burst mode. configureBurstmodeRegister must have been called first.
 	void write24BitWord(uint32_t word); // Write a single 24-bit word using burst mode. configureBurstmodeRegister must have been called first.
