@@ -81,6 +81,7 @@ convertEpochToDateTime	KEYWORD2
 convertEpochToDateTimeAOP	KEYWORD2
 convertGPSTimeToEpoch	KEYWORD2
 printAOPbulletin	KEYWORD2
+beginPCA9536	KEYWORD2
 getINT1	KEYWORD2
 configureBootPin	KEYWORD2
 setRESETBPin	KEYWORD2

@@ -650,6 +650,9 @@ public:
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
 
+	// smôl specifics
+	boolean beginPCA9536();
+
 	// GPIO helper functions
 	boolean configureBootPin();
 	boolean setRESETBPin(uint8_t highLow);
@@ -725,7 +728,6 @@ private:
 	const uint8_t SMOL_PCA9536_INPUT_PORT = 0x00;
 	const uint8_t SMOL_PCA9536_OUTPUT_PORT = 0x01;
 	const uint8_t SMOL_PCA9536_CONFIGURATION_REGISTER = 0x03;
-	boolean beginPCA9536();
 	boolean setSmolG8(uint8_t highLow);     // Gain8  = PCA9536 GPIO3
 	boolean setSmolBOOT(uint8_t highLow);   // BOOT   = PCA9536 GPIO2
 	uint8_t getSmolINT1();               // INT1   = PCA9536 GPIO1
