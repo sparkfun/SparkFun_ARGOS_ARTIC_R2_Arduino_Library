@@ -58,7 +58,7 @@ boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, i
 	return (beginInternal());
 }
 
-boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort, boolean holdAtReset)
+boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort, boolean returnAtReset)
 {
 	_board = ARTIC_R2_BOARD_SMOL;
 	_cs = user_CSPin;
@@ -66,10 +66,10 @@ boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned lon
 	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
 	_spiPort = &spiPort; // Defaults to SPI
 	_i2cPort = &wirePort; // Defaults to Wire
-	return (beginInternal(holdAtReset));
+	return (beginInternal(returnAtReset));
 }
 
-boolean ARTIC_R2::beginInternal(boolean holdAtReset)
+boolean ARTIC_R2::beginInternal(boolean returnAtReset)
 {
 /*
 	A note about the smôl pins:
@@ -86,6 +86,9 @@ boolean ARTIC_R2::beginInternal(boolean holdAtReset)
 	- G8 is connected to an opto-isolator. The weak pull-up won't be enough to enable the LED
 	  in the isolator. The RF Amp will default to using reduced gain as its G8 pin has a pull-
 	  down resistor connected to it.
+
+	If returnAtReset is true, beginInternal will return(true) once the PCA9536 has been started and the RESETB pin
+	has been pulled low. We need this to allow the smôl ARTIC R2 flash memory to be programmed during production.
 */
 	if (_printDebug == true)
 		_debugPort->println(F("begin: ARTIC is starting..."));
@@ -151,6 +154,10 @@ boolean ARTIC_R2::beginInternal(boolean holdAtReset)
 	}
 
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
+
+	//Return now if returnAtReset is true
+	if (returnAtReset)
+		return (true);
 
 	if (enableRFpower()) // Enable power for the RF amplifier
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
