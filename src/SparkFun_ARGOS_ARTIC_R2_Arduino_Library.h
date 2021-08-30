@@ -37,11 +37,21 @@
 
 #include <SPI.h> // Needed for SPI communication
 
+#include <Wire.h> // Needed for I2C communication with the PCA9536 on the smôl ARTIC R2
+
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
 //#define ARTIC_R2_UPLOAD_FIRMWARE // Uncomment this line to configure the ARTIC R2 firmware via SPI, instead of booting from flash memory
 
 #include "ARTIC_R2_Firmware.h" // This file defines the firmware parameter memory locations. The locations for ARTIC004 and ARTIC006 are very different!
+
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
+
+typedef enum {
+	ARTIC_R2_BOARD_SHIELD = 0,	// The original Shield / Breakout
+	ARTIC_R2_BOARD_IOTA,		// IOTA
+	ARTIC_R2_BOARD_SMOL			// smôl ARTIC R2
+} ARTIC_R2_Board_Type_e;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=
 
@@ -519,6 +529,7 @@ public:
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
 	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 	boolean beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
+	boolean beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI, TwoWire &wirePort = Wire, boolean returnAtReset = false);
 
 	void enableDebugging(Stream &debugPort = Serial); //Turn on debug printing. If user doesn't specify then Serial will be used.
 
@@ -526,8 +537,8 @@ public:
 
 	void enableARTICpower(); // Enable power for the ARTIC R2 by pulling the power enable pin high
 	void disableARTICpower(); // Disable power for the ARTIC R2 by pulling the power enable pin low
-	void enableRFpower(); // Enable power for the RF amplifier by pulling the power enable pin high
-	void disableRFpower(); // Disable power for the RF amplifier by pulling the power enable pin low
+	boolean enableRFpower(); // Enable power for the RF amplifier by pulling the power enable pin high
+	boolean disableRFpower(); // Disable power for the RF amplifier by pulling the power enable pin low
 
 	void readStatusRegister(ARTIC_R2_Firmware_Status *status); // Read the ARTIC R2 status register
 
@@ -639,26 +650,34 @@ public:
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
 
+	// GPIO helper functions
+	uint8_t getINT1();
+
 private:
 	//Variables
-	Stream *_debugPort;			 //The stream to send debug messages to if enabled. Usually Serial.
-	boolean _printDebug = false; //Flag to print debugging variables
+	ARTIC_R2_Board_Type_e _board;				// Shield, IOTA or smôl
 
-	SPIClass *_spiPort; // The generic connection to user's chosen SPI hardware
-	unsigned long _spiPortSpeed; // Optional user defined port speed
-	int _cs; // ARTIC R2 SPI Chip Select
-	int _rst; // ARTIC R2 Reset pin
-	int _boot; // ARTIC R2 Boot pin
-	int _artic_pwr_en; // Pull this pin high to enable power for the ARTIC R2
-	int _rf_pwr_en; // Pull this pin high to enable power for the RF amplifier
-	int _int1; // ARTIC R2 Interrupt 1 pin
-	int _int2; // ARTIC R2 Interrupt 2 pin
-	int _gain8 = -1; // Pull this pin high to use the full transmit power
+	Stream *_debugPort = NULL;		//The stream to send debug messages to if enabled. Usually Serial.
+	boolean _printDebug = false;	//Flag to print debugging variables
+
+	SPIClass *_spiPort = NULL;		// The generic connection to user's chosen SPI hardware
+	unsigned long _spiPortSpeed = 1000000;	// Optional user defined port speed. Default to 1MHz
+
+	int _cs;				// ARTIC R2 SPI Chip Select
+	int _rst = -1;			// ARTIC R2 Reset pin
+	int _boot = -1;			// ARTIC R2 Boot pin
+	int _artic_pwr_en;		// Pull this pin high to enable power for the ARTIC R2
+	int _rf_pwr_en = -1;	// Pull this pin high to enable power for the RF amplifier
+	int _int1 = -1;			// ARTIC R2 Interrupt 1 pin
+	int _int2 = -1;			// ARTIC R2 Interrupt 2 pin
+	int _gain8 = -1;		// Pull this pin high to use the full transmit power
+
+    TwoWire *_i2cPort = NULL;		//Connection to the PCA9536 on the smôl ARTIC R2
 
 	// The user has to wait for the duration of 24 SPI clock cycles after configuring the burst read mode, before starting the first read.
 	// This allows some time for the internal memory access block to retrieve the first data sample.
-	// Default value is 24 * 1/3000000 = 8 microseconds
-	uint32_t _delay24cycles = 8; // Delay for this many microseconds before performing a read
+	// Default value is 24 * 1/1000000 = 24 microseconds
+	uint32_t _delay24cycles = 24; // Delay for this many microseconds before performing a read
 
 	// Use instructionInProgress to keep track of which instruction is currently in progress.
 	// instructionInProgress will be ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS when the ARTIC is idle.
@@ -670,7 +689,7 @@ private:
 	uint32_t _platformID = 0; // Default to zero as that is what will be read from memory on earlier SparkFun boards
 
 	//Functions
-	boolean beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort);
+	boolean beginInternal(boolean returnAtReset = false);
 	void configureBurstmodeRegister(ARTIC_R2_Burstmode_Register burstmode); // Configure the burst mode register
 	void readMultipleWords(uint8_t *buffer, int wordSizeInBits, int numWords); // Read multiple words using burst mode. configureBurstmodeRegister must have been called first.
 	void write24BitWord(uint32_t word); // Write a single 24-bit word using burst mode. configureBurstmodeRegister must have been called first.
@@ -698,6 +717,22 @@ private:
 	void print_sat(orbitParameters *p_po, int number_sat);
 	int satellitePassPrediction(configurationParameters *p_pc, orbitParameters *p_po, predictionParameters *p_pp, int number_sat);
 	float textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t digitsAfterDP);
+
+	// smôl specifics
+	const uint8_t SMOL_PCA9536_I2C_ADDRESS = 0x41;
+	const uint8_t SMOL_PCA9536_INPUT_PORT = 0x00;
+	const uint8_t SMOL_PCA9536_OUTPUT_PORT = 0x01;
+	const uint8_t SMOL_PCA9536_CONFIGURATION_REGISTER = 0x03;
+	boolean beginPCA9536();
+	boolean setSmolG8(uint8_t highLow);     // Gain8  = PCA9536 GPIO3
+	boolean setSmolBOOT(uint8_t highLow);   // BOOT   = PCA9536 GPIO2
+	uint8_t getSmolINT1();               // INT1   = PCA9536 GPIO1
+	boolean setSmolRESETB(uint8_t highLow); // RESETB = PCA9536 GPIO0
+	boolean setPCA9536Output(uint8_t highLow, uint8_t theGPIOpin);
+
+	// GPIO helper functions
+	boolean configureBootPin();
+	boolean setRESETBPin(uint8_t highLow);
 };
 
 #endif
