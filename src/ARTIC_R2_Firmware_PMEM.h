@@ -10239,4 +10239,4 @@
 	0x00000000,
 	0x00000000,
 	0x00000000,
-	0x00000000
+	0x00000000 // <-- From v1.1.0: insert your Platform ID here when booting from SPI

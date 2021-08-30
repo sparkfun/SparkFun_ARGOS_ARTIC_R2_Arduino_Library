@@ -14,6 +14,7 @@ ARTIC_R2	KEYWORD1
 
 begin	KEYWORD2
 beginIOTA	KEYWORD2
+beginSmol	KEYWORD2
 enableDebugging	KEYWORD2
 attenuateTXgain	KEYWORD2
 enableARTICpower	KEYWORD2
@@ -30,6 +31,7 @@ checkMCUinstructionProgress	KEYWORD2
 printInstructionProgress	KEYWORD2
 clearInterrupts	KEYWORD2
 readFirmwareVersion	KEYWORD2
+readPlatformID	KEYWORD2
 readMemoryCRC	KEYWORD2
 setRxTimeout	KEYWORD2
 setSatelliteDetectionTimeout	KEYWORD2
@@ -79,6 +81,7 @@ convertEpochToDateTime	KEYWORD2
 convertEpochToDateTimeAOP	KEYWORD2
 convertGPSTimeToEpoch	KEYWORD2
 printAOPbulletin	KEYWORD2
+getINT1	KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

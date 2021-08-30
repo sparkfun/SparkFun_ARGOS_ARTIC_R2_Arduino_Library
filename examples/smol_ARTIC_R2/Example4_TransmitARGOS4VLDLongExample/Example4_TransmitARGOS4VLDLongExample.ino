@@ -1,9 +1,31 @@
 /*
-  Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
+  Using the SparkFun smôl ARGOS ARTIC R2 Board
   By: Paul Clark
   SparkFun Electronics
-  Date: June 8th 2021
+  Date: August 30th 2021
 
+  This example shows how to use the smôl ARTIC R2 for ARGOS satellite communication.
+  The smôl ESP32 is the board which runs this example.
+
+  Feel like supporting our work? Buy a board from SparkFun!
+
+  The smôl stack-up for this example is:
+  smôl ZOE-M8Q:          https://www.sparkfun.com/products/18358
+  smôl ARTIC R2:         https://www.sparkfun.com/products/18363
+  
+  The way the boards are stacked is important:
+
+  OUT ---smôl ARTIC R2--- IN
+                           |
+   ________________________/
+  /
+  |
+  OUT ---  smôl ESP32 --- IN
+
+  Arranged like this:
+  The ESP32 GPIO0 (Digital Pin 27) controls the power for the ARTIC R2
+  ARTIC R2 uses SPI Chip Select 0 (ESP32 Digital Pin 5)
+  
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
@@ -11,7 +33,7 @@
     sets the TCXO voltage;
     sets the TCXO warmup time;
     sets the satellite detection timeout to 60 seconds;
-    sets the TX mode to ARGOS PTT A2;
+    sets the TX mode to ARGOS A4 VLD;
     sets the TX frequency;
     instructs the ARTIC to Transmit One Package And Go Idle;
     keeps checking the MCU status until transmit is complete;
@@ -19,86 +41,55 @@
 
   The transmit power can be reduced by 8dB by uncommenting the line: myARTIC.attenuateTXgain(true);
 
-  License: please see the license file at:
-  https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
+  The messages are ARGOS 4 VLD (Long) and contain the example used in A4-SS-TER-SP-0079-CNES.
 
-  Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/17236
-
-  Hardware Connections:
-  This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
-  https://www.sparkfun.com/products/15574
-  CS_Pin = A5 (D24)
-  GAIN8_Pin = D3
-  BOOT_Pin = D4
-  INT1_Pin = D5
-  INT2_Pin = D6
-  RESET_Pin = D7
-  ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D8
-  RF_PWR_EN_Pin = D9
-  (SPI COPI = D11)
-  (SPI CIPO = D12)
-  (SPI SCK = D13)
-
-  If you are using IOTA, uncomment the #define IOTA below.
-  IOTA only has one power enable pin. Uncommenting the #define IOTA will let the code run correctly on IOTA.
-  
 */
-
-//#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
 // From v1.1.0 of the library, the platform ID is stored in PMEM and, for this example, should be 0x01234567
 
-const uint8_t Nx32_bits = 8; // In this example, transmit the maximum amount of data
-
-// The user data. Note: only the least-significant 24 bits of userData[0] are transmitted.
-const uint32_t userData[Nx32_bits] = {0x00111213, 0x21222324, 0x31323334, 0x41424344, 0x51525354, 0x61626364, 0x71727374, 0x81828384};
-
-// The complete over-air data pattern (after the sync pattern) will be 0xF123456711121321222324313233344142434451525354616263647172737481828384
-
 const unsigned long repetitionPeriod = 50000; // Define the repetition period in milliseconds
 
-const uint32_t tcxoWarmupTime = 10; // Define the TCXO warmup time
+const uint32_t tcxoWarmupTime = 10; // Define the TCXO warmup time (in seconds)
 
 #include <SPI.h>
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
 ARTIC_R2 myARTIC;
 
-// Pin assignments for the SparkFun Thing Plus - Artemis
-// (Change these if required)
-int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
-int BOOT_Pin = 4;
-int INT1_Pin = 5;
-int INT2_Pin = 6;
-int RESET_Pin = 7;
-#ifdef IOTA
-int IOTA_PWR_EN_Pin = 8; // IOTA has a single power enable pin
-#else
-int ARTIC_PWR_EN_Pin = 8; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
-int RF_PWR_EN_Pin = 9;
-#endif
+#include <Wire.h> //Needed for I2C to ARTIC R2 GPIO and GNSS
+
+#include "SparkFun_u-blox_GNSS_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_u-blox_GNSS
+SFE_UBLOX_GNSS myGNSS;
+
+// Pin assignments for the smôl stack-up described above
+int CS_Pin = 5;            // smôl CS0 = ESP32 Pin 5
+int ARTIC_PWR_EN_Pin = 27; // smôl GPIO0 = ESP32 Pin 27
+
+// The ARTIC RESETB, INT1, BOOT and G8 signals are accessed through a PCA9536 I2C-GPIO chip on the smôl ARTIC R2
 
 // Loop Steps - these are used by the switch/case in the main loop
 // This structure makes it easy to jump between any of the steps
-enum {
+typedef enum {
   configure_ARTIC,     // Configure the ARTIC (set the satellite detection timeout and TX mode)
   ARTIC_TX,            // Start the ARTIC TX
-  wait_for_ARTIC_TX,   // Wait for the ARTIC to transmit
+  wait_for_ARTIC_TX    // Wait for the ARTIC to transmit
 } loop_steps;
-int loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
+loop_steps loop_step = configure_ARTIC; // Make sure loop_step is set to configure_ARTIC
 
 // AS3-SP-516-2098-CNES specifies a ±10% 'jitter' on the repetition period to reduce the risk of transmission collisions
-unsigned long nextTransmitTime; // Time of the next satellite transmission (before jitter is added)
-unsigned long nextTransmitTimeActual; // Actual time of the next satellite transmission (including jitter)
+uint32_t nextTransmitTime; // Time of the next satellite transmission (before jitter is added)
+uint32_t nextTransmitTimeActual; // Actual time of the next satellite transmission (including jitter)
 
 void setup()
 {
+  delay(1000);
+  
   Serial.begin(115200);
   Serial.println();
-  Serial.println(F("ARGOS ARTIC R2 Example"));
+  Serial.println(F("SparkFun smôl ARTIC R2 Example"));
   Serial.println();
+
+  Wire.begin();
 
   SPI.begin();
 
@@ -109,18 +100,14 @@ void setup()
   Serial.println();
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
-#ifdef IOTA
-  if (myARTIC.beginIOTA(CS_Pin, RESET_Pin, BOOT_Pin, IOTA_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
-#else
-  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
-#endif
+  if (myARTIC.beginSmol(CS_Pin, ARTIC_PWR_EN_Pin) == false) // Default to using Wire to communicate with the PCA9536 I2C-GPIO chip on the smôl ARTIC R2
   {
-    Serial.println("ARTIC R2 not detected. Freezing...");
+    Serial.println("ARTIC R2 not detected. Please check the smôl stack-up and flexible circuits. Freezing...");
     while (1)
       ; // Do nothing more
   }
 
-  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // From v1.1.0 of the ARTIC R2 library: we were instructed by Kineis to ensure the Platform ID was written into each module
   // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
   // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
   // earlier versions of the board will need to use version 1.0.9 of the library.
@@ -177,8 +164,8 @@ void loop()
           ; // Do nothing more
       }
 
-      // Set the TX mode to ARGOS PTT A2
-      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_PTT_A2_TX_MODE);
+      // Set the TX mode to ARGOS 4 VLD
+      ARTIC_R2_MCU_Command_Result result = myARTIC.sendConfigurationCommand(CONFIG_CMD_SET_ARGOS_4_PTT_VLD_TX_MODE);
       myARTIC.printCommandResult(result); // Pretty-print the command result to Serial
       if (result != ARTIC_R2_MCU_COMMAND_ACCEPTED)
       {
@@ -192,39 +179,32 @@ void loop()
       myARTIC.readARGOSconfiguration(&configuration);
       myARTIC.printARGOSconfiguration(configuration);
 
-      // Set the ARGOS PTT A2 frequency to 401.630 MHz
-      // From AS3-SP-516-2098-CNES:
-      // The transmission frequency for PTT/PMT-A2 platforms shall be set between 399.91 MHz to 401.68 MHz.
-      // Due to frequency regulations, the frequency ranges [400.05 MHz to 401.0 MHz] and [401.2 MHz to 401.3 MHz] are forbidden for A2 transmissions.
-      if (myARTIC.setARGOS23TxFrequency(401.630) == false)
+      // Set the ARGOS 4 TX frequency to 401.630 MHz
+      // From A4-SS-TER-SP-0079-CNES:
+      // The transmission frequency for PTT-VLD-A4 platforms shall be set between 399.91 MHz to 401.68 MHz.
+      // Due to frequency regulations, the frequency ranges [400.05 MHz to 401.0 MHz] and [401.2 MHz to 401.3 MHz] are forbidden for VLD-A4 transmissions.
+      if (myARTIC.setARGOS4TxFrequency(401.630) == false)
       {
-        Serial.println("setARGOS23TxFrequency failed. Freezing...");
+        Serial.println("setARGOS4TxFrequency failed. Freezing...");
         while (1)
           ; // Do nothing more
       }
 
       // Print the TX frequency
-      float tx2freq = myARTIC.getARGOS23TxFrequency();
-      Serial.print(F("The ARGOS PTT A2 TX Frequency is "));
-      Serial.print(tx2freq, 3);
+      float tx4freq = myARTIC.getARGOS4TxFrequency();
+      Serial.print(F("The ARGOS 4 TX Frequency is "));
+      Serial.print(tx4freq, 3);
       Serial.println(F(" MHz."));
 
       // Uncomment the next line if you want to attenuate the transmit power by 8dB
       //myARTIC.attenuateTXgain(true);
 
-      loop_step = ARTIC_TX; // Move on
-    }
-    break;
-
-    // ************************************************************************************************
-    // Start the ARTIC in Transmit One Package And Go Idle mode
-    case ARTIC_TX:
-    {
-      // Configure the Tx payload for ARGOS PTT A2 using the platform ID and the defined user data
-      // From v1.1.0 of the library, the platform ID is stored in PMEM
-      if (myARTIC.setPayloadARGOS2(Nx32_bits, (uint32_t *)&userData) == false)
+      // Configure the Tx payload for ARGOS 4 VLD (A4-SS-TER-SP-0079-CNES)
+      // If the Platform ID has also been set to 0x01234567, the complete over-air data stream, including sync pattern and length, should be:
+      // 0xAC5353DC651CECA2F6E328E76517B719473B28BD followed by 0b1
+      if (myARTIC.setPayloadARGOS4VLDLong(0x01234567, 0x01234567) == false)
       {
-        Serial.println(F("setPayloadARGOS2 failed!"));
+        Serial.println(F("setPayloadARGOS4VLDLatLon failed!"));
         Serial.println();
         // Read the payload back again and print it
         myARTIC.readTxPayload();
@@ -242,6 +222,14 @@ void loop()
         Serial.println();
 */
 
+      loop_step = ARTIC_TX; // Move on
+    }
+    break;
+
+    // ************************************************************************************************
+    // Start the ARTIC in Transmit One Package And Go Idle mode
+    case ARTIC_TX:
+    {
       // Wait for the next repetition period
       while (nextTransmitTimeActual > millis())
       {

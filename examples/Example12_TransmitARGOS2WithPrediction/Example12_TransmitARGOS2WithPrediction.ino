@@ -2,7 +2,7 @@
   Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: March 21st 2021
+  Date: June 8th 2021
 
   This example requires a u-blox GPS/GNSS module (for the time, latitude and longitude)
   and assumes it is connected via Qwiic (I2C):
@@ -76,9 +76,7 @@
 
 //#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
-// CLS will have provided you with a Platform ID for your ARGOS R2. Copy and paste it into PLATFORM_ID below.
-// E.g.: if your Platform ID is 01:23:AB:CD then set PLATFORM_ID to 0x0123ABCD
-const uint32_t PLATFORM_ID = 0x01234567; // Update this with your Platform ID
+// From v1.1.0 of the library, the platform ID is stored in PMEM
 
 const uint32_t repetitionPeriod = 90; // The delay in seconds between transmits a.k.a. the repetition period (CLS will have told you what your repetition period should be)
 const uint8_t numberTransmits = 5; // The number of transmit attempts for each pass (** Make sure this is >= 1 **)
@@ -89,7 +87,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 3 2021  4 26 22 32  3  6890.985  97.4645  108.117  -23.751   95.0047  -3.68 MA A 5 3 0 2021  4 26 22 24 55  7195.569  98.4768  326.878  -25.341  101.3593   0.00 MB 9 3 0 0 2021  4 26 21 58 17  7195.657  98.7194  352.941  -25.340  101.3605   0.00 MC B 7 3 0 2021  4 26 22 52 44  7195.544  98.6906  339.785  -25.339  101.3582   0.00 15 5 0 0 0 2021  4 26 22 27 40  7180.367  98.6846  313.850  -25.259  101.0382  -0.99 18 8 0 0 0 2021  4 26 22 51 23  7225.742  98.9985  343.598  -25.497  101.9951  -0.93 19 C 6 0 0 2021  4 26 21 51 19  7226.285  99.1854  313.382  -25.499  102.0060  -0.47 SR D 4 3 0 2021  4 26 23 10 57  7160.192  98.5428  100.879  -25.153  100.6137  -0.23";
+const char AOP[] =      " A1 6 0 0 3 2021  6  7 23  9 29  6890.912  97.4647   98.723  -23.751   95.0032  -3.52 MA A 5 3 0 2021  6  7 22 56 18  7195.532  98.4708  317.970  -25.341  101.3585   0.00 MB 9 3 0 0 2021  6  7 22 30 15  7195.615  98.7166  345.033  -25.340  101.3596   0.00 MC B 7 3 0 2021  6  7 23 24  3  7195.594  98.6865  331.901  -25.340  101.3593   0.00 15 5 0 0 0 2021  6  7 23  8 48  7180.342  98.6805  303.809  -25.259  101.0377  -0.10 18 8 0 0 0 2021  6  7 22 54 54  7225.705  98.9953  343.500  -25.497  101.9943  -0.91 19 C 6 0 0 2021  6  7 22  0 34  7226.202  99.1817  312.724  -25.498  102.0043  -0.70 SR D 4 3 0 2021  6  7 22 59  8  7160.169  98.5429  103.805  -25.153  100.6132  -0.28";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -184,6 +182,25 @@ void setup()
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)
       ; // Do nothing more
+  }
+
+  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
+  // earlier versions of the board will need to use version 1.0.9 of the library.
+  uint32_t platformID = myARTIC.readPlatformID();
+  if (platformID == 0)
+  {
+    Serial.println(F("You appear to have an early version of the SparkFun board."));
+    Serial.println(F("Please use the Library Manager to select version 1.0.9 of this library."));
+    Serial.println(F("Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
+  else
+  {
+    Serial.print(F("Your Platform ID is: 0x"));
+    Serial.println(platformID, HEX);
   }
 }
 
@@ -447,7 +464,8 @@ void loop()
         Serial.println();
 
         // Configure the Tx payload for ARGOS PTT-A2 using our platform ID and the latest lat/lon
-        if (myARTIC.setPayloadARGOS2LatLon(PLATFORM_ID, lat_tx, lon_tx) == false)
+        // From v1.1.0 the Platform ID is stored in PMEM
+        if (myARTIC.setPayloadARGOS2LatLon(lat_tx, lon_tx) == false)
         {
           Serial.println(F("setPayloadARGOS2LatLon failed!"));
           Serial.println();

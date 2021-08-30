@@ -1,9 +1,38 @@
 /*
-  Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
+  Using the SparkFun smôl ARGOS ARTIC R2 Board
   By: Paul Clark
   SparkFun Electronics
-  Date: June 8th 2021
+  Date: August 30th 2021
 
+  This example shows how to use the smôl ARTIC R2 for ARGOS satellite communication.
+  The smôl ESP32 is the board which runs this example.
+  Power can be provided by:
+    The ESP32 board USB-C connection
+    The smôl Power Board AAA
+    The smôl Power Board LiPo
+
+  Feel like supporting our work? Buy a board from SparkFun!
+
+  The smôl stack-up for this example is:
+  smôl ARTIC R2:         https://www.sparkfun.com/products/18363
+  smôl ESP32:            https://www.sparkfun.com/products/18362
+  
+  smôl Power Board LiPo: https://www.sparkfun.com/products/18359 (Optional)
+  smôl Power Board AAA:  https://www.sparkfun.com/products/18360 (Optional)
+
+  The way the boards are stacked is important:
+
+  OUT ---smôl ARTIC R2--- IN
+                           |
+   ________________________/
+  /
+  |
+  OUT ---  smôl ESP32 --- IN
+
+  Arranged like this:
+  The ESP32 GPIO0 (Digital Pin 27) controls the power for the ARTIC R2
+  ARTIC R2 uses SPI Chip Select 0 (ESP32 Digital Pin 5)
+  
   This example:
     begins (initializes) the ARTIC;
     reads and prints the ARTIC TX and RX configuration;
@@ -13,98 +42,46 @@
     starts satellite detection;
     keeps checking the MCU status until a satellite is detected or the detection times out.
 
-  License: please see the license file at:
-  https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/LICENSE.md
-
-  Feel like supporting our work? Buy a board from SparkFun!
-  https://www.sparkfun.com/products/17236
-
-  Hardware Connections:
-  This example assumes the ARTIC Breakout has been mounted on a SparkFun Thing Plus - Artemis:
-  https://www.sparkfun.com/products/15574
-  CS_Pin = A5 (D24)
-  GAIN8_Pin = D3
-  BOOT_Pin = D4
-  INT1_Pin = D5
-  INT2_Pin = D6
-  RESET_Pin = D7
-  ARTIC_PWR_EN_Pin = IOTA_PWR_EN_Pin = D8
-  RF_PWR_EN_Pin = D9
-  (SPI COPI = D11)
-  (SPI CIPO = D12)
-  (SPI SCK = D13)
-
-  If you are using IOTA, uncomment the #define IOTA below.
-  IOTA only has one power enable pin. Uncommenting the #define IOTA will let the code run correctly on IOTA.
-  
 */
 
-//#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
+#include <Wire.h> //Needed for I2C to ARTIC R2 GPIO and GNSS
 
 #include <SPI.h>
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h" // Click here to get the library: http://librarymanager/All#SparkFun_ARGOS_ARTIC_R2
 ARTIC_R2 myARTIC;
 
-// Pin assignments for the SparkFun Thing Plus - Artemis
-// (Change these if required)
-int CS_Pin = 24;
-int GAIN8_Pin = 3; // Optional. Set to -1 if you don't want to control the gain. The library defaults to maximum power.
-int BOOT_Pin = 4;
-int INT1_Pin = 5;
-int INT2_Pin = 6;
-int RESET_Pin = 7;
-#ifdef IOTA
-int IOTA_PWR_EN_Pin = 8; // IOTA has a single power enable pin
-#else
-int ARTIC_PWR_EN_Pin = 8; // The ARTIC R2 Breakout has separate enables for the ARTIC and the RF Amplifier
-int RF_PWR_EN_Pin = 9;
-#endif
+// Pin assignments for the smôl stack-up described above
+int CS_Pin = 5;            // smôl CS0 = ESP32 Pin 5
+int ARTIC_PWR_EN_Pin = 27; // smôl GPIO0 = ESP32 Pin 27
+
+// The ARTIC RESETB, INT1, BOOT and G8 signals are accessed through a PCA9536 I2C-GPIO chip on the smôl ARTIC R2
 
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
-  Serial.println(F("ARGOS ARTIC R2 Example"));
+  Serial.println(F("ARGOS smôl ARTIC R2 Example"));
   Serial.println();
 
   Serial.println(F("ARTIC R2 is booting..."));
   Serial.println();
 
+  Wire.begin(); // Needed to communicate with the I2C GPIO chip on the smôl ARTIC R2
   SPI.begin();
 
   //myARTIC.enableDebugging(); // Enable debug messages to Serial
 
   // Begin the ARTIC: enable power and upload firmware or boot from flash
-#ifdef IOTA
-  if (myARTIC.beginIOTA(CS_Pin, RESET_Pin, BOOT_Pin, IOTA_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
-#else
-  if (myARTIC.begin(CS_Pin, RESET_Pin, BOOT_Pin, ARTIC_PWR_EN_Pin, RF_PWR_EN_Pin, INT1_Pin, INT2_Pin, GAIN8_Pin) == false)
-#endif
+  if (myARTIC.beginSmol(CS_Pin, ARTIC_PWR_EN_Pin) == false) // Default to using Wire to communicate with the PCA9536 I2C-GPIO chip on the smôl ARTIC R2
   {
-    Serial.println("ARTIC R2 not detected. Freezing...");
+    Serial.println("ARTIC R2 not detected. Please check the smôl stack-up and flexible circuits. Freezing...");
     while (1)
       ; // Do nothing more
   }
 
   Serial.println(F("ARTIC R2 boot was successful."));
   Serial.println();
-
-  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
-  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
-  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
-  // earlier versions of the board will need to use version 1.0.9 of the library.
-  uint32_t platformID = myARTIC.readPlatformID();
-  if (platformID == 0)
-  {
-    Serial.println(F("You appear to have an early version of the SparkFun board."));
-    Serial.println(F("For the transmit examples, you will need to use the Library Manager to select version 1.0.9 of this library."));
-  }
-  else
-  {
-    Serial.print(F("Your Platform ID is: 0x"));
-    Serial.println(platformID, HEX);
-  }
 
   // Read and print the ARTIC R2 firmware status
   ARTIC_R2_Firmware_Status status;

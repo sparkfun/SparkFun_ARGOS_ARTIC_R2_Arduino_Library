@@ -2,7 +2,7 @@
   Using the SparkFun ARGOS ARTIC R2 Breakout & IOTA
   By: Paul Clark
   SparkFun Electronics
-  Date: April 12th 2021
+  Date: June 8th 2021
 
   This example:
     begins (initializes) the ARTIC;
@@ -45,7 +45,7 @@
 
 //#define IOTA // Uncomment this line if you are using IOTA (not the ARTIC R2 Breakout)
 
-const uint32_t PLATFORM_ID = 0x01234567;
+// From v1.1.0 of the library, the platform ID is stored in PMEM and, for this example, should be 0x01234567
 
 const uint8_t Nx32_bits = 8; // In this example, transmit the maximum amount of data
 
@@ -114,6 +114,25 @@ void setup()
     Serial.println("ARTIC R2 not detected. Freezing...");
     while (1)
       ; // Do nothing more
+  }
+
+  // From v1.1.0: we were instructed by Kineis to ensure the Platform ID was written into each module
+  // and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+  // ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. Customers who have
+  // earlier versions of the board will need to use version 1.0.9 of the library.
+  uint32_t platformID = myARTIC.readPlatformID();
+  if (platformID == 0)
+  {
+    Serial.println(F("You appear to have an early version of the SparkFun board."));
+    Serial.println(F("Please use the Library Manager to select version 1.0.9 of this library."));
+    Serial.println(F("Freezing..."));
+    while (1)
+      ; // Do nothing more
+  }
+  else
+  {
+    Serial.print(F("Your Platform ID is: 0x"));
+    Serial.println(platformID, HEX);
   }
 
   // Define the time of the first transmit
@@ -195,7 +214,8 @@ void loop()
     case ARTIC_TX:
     {
       // Configure the Tx payload for ARGOS PTT A3 using the platform ID and the defined user data
-      if (myARTIC.setPayloadARGOS3(PLATFORM_ID, Nx32_bits, (uint32_t *)&userData) == false)
+      // From v1.1.0 of the library, the platform ID is stored in PMEM and, for this example, should be 0x01234567
+      if (myARTIC.setPayloadARGOS3(Nx32_bits, (uint32_t *)&userData) == false)
       {
         Serial.println(F("setPayloadARGOS3 failed!"));
         Serial.println();

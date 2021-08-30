@@ -32,7 +32,28 @@ Documentation
 --------------
 
 * **[Installing an Arduino Library Guide](https://learn.sparkfun.com/tutorials/installing-an-arduino-library)** - Basic information on how to install an Arduino library.
-* **[Product Repository](https://github.com/sparkfunX/ARGOS-ARTIC-R2-Shield)** - Main repository (including hardware files)
+* **[ARGOS ARTIC R2 Shield Product Repository](https://github.com/sparkfunX/ARGOS-ARTIC-R2-Shield)** - Main repository (including hardware files)
+* **[IOTA Product Repository](https://github.com/sparkfunX/IOTA-ARTIC-R2-Module)**
+* **[smôl ARTIC R2 Product Repository](https://github.com/sparkfunX/SparkX_smol_ARTIC_R2)**
+
+v1.1
+-------------------
+
+From v1.1.0 of the library:
+
+We were instructed by Kineis to ensure that the Platform ID was written directly into each module
+and not stored in a configuration file accessible to standard users. To comply with this, SparkFun
+ARTIC R2 boards are now shipped with the Platform ID programmed into PMEM. When you buy a board from SparkFun,
+it will come with a card showing what the Platform ID for that board is. You will need to contact CLS or
+Woods Hole Group to have the Platform ID added to your account.
+
+The library functions have been modified so that the Platform ID is read from PMEM instead of being a passed as an argument.
+The library examples and functions read the Platform ID from the ARTIC R2 memory using ```readPlatformID```.
+Early boards will return a value of zero, later boards will return an ID starting with (e.g.) 0x3368.
+If the example stalls because the Platform ID is zero, you can:
+- use the Arduino IDE Library Manager to install v1.0.9 of the library (which does allow the Platform ID to be passed as an argument)
+- manually download and install the library using [this link to the v1.0.9 zip file](https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/archive/refs/tags/v1.0.9.zip)
+or [this link to the v1.0.9 tar.gz file](https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/archive/refs/tags/v1.0.9.tar.gz)
 
 Booting
 -------------------
@@ -40,7 +61,7 @@ Booting
 The ARTIC R2 can either boot from on-board flash memory, or the firmware can be downloaded by the MCU via SPI.
 This library supports both methods but defaults to booting from on-board flash.
 
-If you want to change this, you will need to edit [the library header file](https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/blob/master/src/SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h#L42)
+If you want to change this, you will need to edit [the library header file](https://github.com/sparkfun/SparkFun_ARGOS_ARTIC_R2_Arduino_Library/blob/master/src/SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h#L44)
 and uncomment the line which says ```#define ARTIC_R2_UPLOAD_FIRMWARE```. From then on the ARTIC R2 will be booted via SPI instead.
 
 **Note: the ARTIC006 firmware occupies 127KBytes of program memory. You will need an MCU with adequate memory if you choose to boot via SPI.**

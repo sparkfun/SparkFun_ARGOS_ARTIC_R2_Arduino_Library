@@ -28,99 +28,150 @@
 
 boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
 {
-	return (beginInternal(false, user_CSPin, user_RSTPin, user_BOOTPin, user_ARTICPWRENPin, user_RFPWRENPin, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort));
-}
-
-boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
-{
-	return (beginInternal(true, user_CSPin, user_RSTPin, user_BOOTPin, user_IOTAPWRENPin, -1, user_INT1Pin, user_INT2Pin, user_GAIN8Pin, spiPortSpeed, spiPort));
-}
-
-boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
-{
-	if (_printDebug == true)
-		_debugPort->println(F("begin: ARTIC is starting..."));
-
-	//Get user settings
-	_spiPort = &spiPort;
-	_spiPortSpeed = spiPortSpeed;
-	if (_spiPortSpeed > 5000000)
-		_spiPortSpeed = 5000000; //Datasheet indicates max speed is 5MHz for P memory writes
-
-	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay based on the clock speed
-	_delay24cycles++; // Round up by 1
-
-	_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Clear _instructionInProgress
-
-	// Mandatory pins
+	_board = ARTIC_R2_BOARD_SHIELD;
 	_cs = user_CSPin;
-	_boot = user_BOOTPin;
 	_rst = user_RSTPin;
+	_boot = user_BOOTPin;
 	_artic_pwr_en = user_ARTICPWRENPin;
 	_rf_pwr_en = user_RFPWRENPin;
 	_int1 = user_INT1Pin;
 	_int2 = user_INT2Pin;
+	_gain8 = user_GAIN8Pin; // Defaults to -1
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	return (beginInternal());
+}
 
-	// Optional pin
-	_gain8 = user_GAIN8Pin;
+boolean ARTIC_R2::beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
+{
+	_board = ARTIC_R2_BOARD_IOTA;
+	_cs = user_CSPin;
+	_rst = user_RSTPin;
+	_boot = user_BOOTPin;
+	_artic_pwr_en = user_IOTAPWRENPin;
+	_rf_pwr_en = -1; // IOTA does not have a separate RF enable
+	_int1 = user_INT1Pin;
+	_int2 = user_INT2Pin;
+	_gain8 = user_GAIN8Pin; // Defaults to -1
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	return (beginInternal());
+}
+
+boolean ARTIC_R2::beginSmol(int user_CSPin, int user_ARTICPWRENPin, unsigned long spiPortSpeed, SPIClass &spiPort, TwoWire &wirePort, boolean returnAtReset)
+{
+	_board = ARTIC_R2_BOARD_SMOL;
+	_cs = user_CSPin;
+	_artic_pwr_en = user_ARTICPWRENPin;
+	_spiPortSpeed = spiPortSpeed; // Defaults to 1000000
+	_spiPort = &spiPort; // Defaults to SPI
+	_i2cPort = &wirePort; // Defaults to Wire
+	return (beginInternal(returnAtReset));
+}
+
+boolean ARTIC_R2::beginInternal(boolean returnAtReset)
+{
+/*
+	A note about the smôl pins:
+	On smôl, the ARTIC RESETB, BOOT and INT1 pins are connected to a PCA9536 I2C GPIO expander.
+	So is the G8 (Gain 8dB) signal.
+	The PCA9536 is only powered when the ARTIC power is enabled. So we need to wait until power
+	for the ARTIC has been enabled before we can configure those pins.
+	When the ARTIC power is first enabled, all four GPIO pins on the PCA9536 will be configured
+	as inputs with weak pull-ups. This is OK because:
+	- RESETB has its own pull-up to VDD and we do not want to hold the ARTIC in reset while the
+	  power is enabled (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence).
+	- INT1 requires an input anyway.
+	- BOOT has its own pull-up - making the ARTIC boot from flash memory
+	- G8 is connected to an opto-isolator. The weak pull-up won't be enough to enable the LED
+	  in the isolator. The RF Amp will default to using reduced gain as its G8 pin has a pull-
+	  down resistor connected to it.
+
+	If returnAtReset is true, beginInternal will return(true) once the PCA9536 has been started and the RESETB pin
+	has been pulled low. We need this to allow the smôl ARTIC R2 flash memory to be programmed during production.
+*/
+	if (_printDebug == true)
+		_debugPort->println(F("begin: ARTIC is starting..."));
+
+	//Check user settings
+	if (_spiPortSpeed > 5000000)
+		_spiPortSpeed = 5000000; //Datasheet indicates max speed is 5MHz for P memory writes
+
+	_delay24cycles = 24000000 / _spiPortSpeed; // Calculate the 24-cycle read delay in microseconds based on the clock speed
+	_delay24cycles++; // Round up by 1
+
+	_instructionInProgress = ARTIC_R2_MCU_PROGRESS_NONE_IN_PROGRESS; // Clear _instructionInProgress
 
 	// Disable the power until we have configured the rest of the IO pins
 	pinMode(_artic_pwr_en, OUTPUT);
 	disableARTICpower();
 
-	if (_rf_pwr_en >= 0)
-	{
-		pinMode(_rf_pwr_en, OUTPUT);
-		disableRFpower();
-	}
+	disableRFpower();
 
 	pinMode(_cs, OUTPUT);
 	digitalWrite(_cs, HIGH); //Deselect ARTIC
 
-	pinMode(_boot, OUTPUT);
-	// The ARTIC will boot from the [onboard] external flash memory when the boot pin is high and reset is released.
-	// If the boot pin is held low at reset the ARTIC will wait for the MCU to upload the Firmware.
-#ifdef ARTIC_R2_UPLOAD_FIRMWARE
-	digitalWrite(_boot, LOW); // Get ready to upload the firmware
-#else
-	digitalWrite(_boot, HIGH); // Boot the ARTIC from flash memory
-#endif
+	if (_int1 >= 0)
+		pinMode(_int1, INPUT_PULLUP);
+	if (_int2 >= 0)
+		pinMode(_int2, INPUT_PULLUP);
 
-	pinMode(_rst, OUTPUT);
-	digitalWrite(_rst, HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
-
-	pinMode(_int1, INPUT_PULLUP);
-	pinMode(_int2, INPUT_PULLUP);
-
-	if (_gain8 >= 0) // Set the RF TX gain the pin is defined
+	if (_board < ARTIC_R2_BOARD_SMOL)
 	{
-		pinMode(_gain8, OUTPUT);
+		configureBootPin();
+		setRESETBPin(HIGH); //Do not place the ARTIC into reset initially (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
 		attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
-		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
 	}
 
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Make sure the power has been turned off for at least ARTIC_R2_POWER_ON_DELAY_MS
 
 	enableARTICpower(); // Enable power for the ARTIC R2
+	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Short delay before we attempt to configure the smôl pins
+
+	// Now we can configure the GPIO pins as outputs/input on smôl
+	if (!configureBootPin())
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: configureBootPin failed!"));
+	}
+	attenuateTXgain(true); // Set the TX gain to minimum while we turn the RF power on, to reduce the current surge
+	if (_board == ARTIC_R2_BOARD_SMOL)
+	{
+		if (!beginPCA9536())
+		{
+			if (_printDebug == true)
+				_debugPort->println(F("begin: beginPCA9536 failed!"));
+		}
+	}
+
 	delay(ARTIC_R2_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_POWER_ON_DELAY_MS
 
-	digitalWrite(_rst, LOW); //Now reset the ARTIC (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	//Now reset the ARTIC (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	if (!setRESETBPin(LOW))
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: setRESETBPin (1) failed!"));
+	}
+
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
-	if (_rf_pwr_en >= 0)
-	{
-		enableRFpower(); // Enable power for the RF amplifier
+	//Return now if returnAtReset is true
+	if (returnAtReset)
+		return (true);
+
+	if (enableRFpower()) // Enable power for the RF amplifier
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
 
 	// Now ramp up the TX gain, if the _gain8 pin is defined
-	if (_gain8 >= 0)
-	{
-		attenuateTXgain(false);
+	if (attenuateTXgain(false))
 		delay(ARTIC_R2_TX_POWER_ON_DELAY_MS);
-	}
 
-	digitalWrite(_rst, HIGH); //Now bring the ARTIC out of reset (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	//Now bring the ARTIC out of reset (see KINEIS-NT-21-0087 - ARTIC R2 Flashing and TX sequence)
+	if (!setRESETBPin(HIGH))
+	{
+		if (_printDebug == true)
+			_debugPort->println(F("begin: setRESETBPin (2) failed!"));
+	}
 	delay(ARTIC_R2_TX_POWER_ON_DELAY_MS); // Wait for ARTIC_R2_TX_POWER_ON_DELAY_MS
 
 	if (_printDebug == true)
@@ -149,18 +200,6 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 
 		digitalWrite(_cs, HIGH);
 		_spiPort->endTransaction();
-/*
-		if (_printDebug == true)
-		{
-			_debugPort->print(F("begin: Reading DSP Control Register: 0x"));
-			if (buffer[0] < 0x10) _debugPort->print(F("0"));
-			_debugPort->print(buffer[0], HEX);
-			if (buffer[1] < 0x10) _debugPort->print(F("0"));
-			_debugPort->print(buffer[1], HEX);
-			if (buffer[2] < 0x10) _debugPort->print(F("0"));
-			_debugPort->println(buffer[2], HEX);
-		}
-*/
 		uint32_t ctrl_reg = (((uint32_t)buffer[0]) << 16) | (((uint32_t)buffer[1]) << 8) | ((uint32_t)buffer[2]);
 
 		if (ctrl_reg == ARTIC_R2_DSP_CRTL_REG_MAGIC_NUMBER) // Does the control register contain the magic number?
@@ -197,13 +236,6 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-/*
-	if (_printDebug == true)
-	{
-		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
-		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
-	}
-*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
 	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
@@ -218,19 +250,7 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
-/*
-		if ((_printDebug == true) && (addr == 0))
-		{
-			_debugPort->print(F("begin: value being written to PMEM address 0 is 0x"));
-			_debugPort->println(word, HEX);
-		}
 
-		if ((_printDebug == true) && (addr == 8000))
-		{
-			_debugPort->print(F("begin: value being written to PMEM address 8000 is 0x"));
-			_debugPort->println(word, HEX);
-		}
-*/
 		// Delay between words
 		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
@@ -243,82 +263,18 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 	_spiPort->endTransaction();
 
 	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-/*
-	// Sanity check: read back the 32-bit words from PMEM addresses 0 and 8000 to see if they were written correctly
-	if (_printDebug == true)
-	{
-		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start of PMEM
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
 
-		configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-		delayMicroseconds(_delay24cycles);
-
-		uint8_t pmemBuffer[4]; // Buffer for the PMEM data
-		uint8_t *ptr = pmemBuffer; // Pointer to the buffer
-
-		readMultipleWords(ptr, 32, 1); // Read exactly 1 32-bit word
-
-		_debugPort->print(F("begin: PMEM address 0 contains 0x"));
-		if (pmemBuffer[0] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[0], HEX);
-		if (pmemBuffer[1] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[1], HEX);
-		if (pmemBuffer[2] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[2], HEX);
-		if (pmemBuffer[3] < 0x10) _debugPort->print(F("0"));
-		_debugPort->println(pmemBuffer[3], HEX);
-
-		delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
-
-		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 8000;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
-		configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-		delayMicroseconds(_delay24cycles);
-
-		readMultipleWords(ptr, 32, 1); // Read exactly 1 32-bit word
-
-		_debugPort->print(F("begin: PMEM address 8000 contains 0x"));
-		if (pmemBuffer[0] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[0], HEX);
-		if (pmemBuffer[1] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[1], HEX);
-		if (pmemBuffer[2] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(pmemBuffer[2], HEX);
-		if (pmemBuffer[3] < 0x10) _debugPort->print(F("0"));
-		_debugPort->println(pmemBuffer[3], HEX);
-
-		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-	}
-*/
 	// Upload ARTIC firmware: XMEM
 	if (_printDebug == true)
 		_debugPort->println(F("begin: uploading ARTIC firmware to XMEM..."));
 
-	burstmode; // Prepare the burstmode register configuration
+	// Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-/*
-	if (_printDebug == true)
-	{
-		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
-		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
-	}
-*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
 	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
@@ -332,19 +288,7 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
-/*
-		if ((_printDebug == true) && (addr == 7000))
-		{
-			_debugPort->print(F("begin: value being written to XMEM address 7000 is 0x"));
-			_debugPort->println(word, HEX);
-		}
 
-		if ((_printDebug == true) && (addr == 10000))
-		{
-			_debugPort->print(F("begin: value being written to XMEM address 10000 is 0x"));
-			_debugPort->println(word, HEX);
-		}
-*/
 		// Delay between words
 		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
@@ -357,78 +301,18 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 	_spiPort->endTransaction();
 
 	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-/*
-	// Sanity check: read back the 32-bit words from XMEM addresses 7000 and 10000 to see if they were written correctly
-	if (_printDebug == true)
-	{
-		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 7000;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
 
-		configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-		delayMicroseconds(_delay24cycles);
-
-		uint8_t xmemBuffer[3]; // Buffer for the XMEM data
-		uint8_t *ptr = xmemBuffer; // Pointer to the buffer
-
-		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
-
-		_debugPort->print(F("begin: XMEM address 7000 contains 0x"));
-		if (xmemBuffer[0] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(xmemBuffer[0], HEX);
-		if (xmemBuffer[1] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(xmemBuffer[1], HEX);
-		if (xmemBuffer[2] < 0x10) _debugPort->print(F("0"));
-		_debugPort->println(xmemBuffer[2], HEX);
-
-		delay(ARTIC_R2_BURST_INTER_BLOCK_DELAY_MS);
-
-		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 10000;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_X_MEMORY;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-
-		configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-		delayMicroseconds(_delay24cycles);
-
-		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
-
-		_debugPort->print(F("begin: XMEM address 10000 contains 0x"));
-		if (xmemBuffer[0] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(xmemBuffer[0], HEX);
-		if (xmemBuffer[1] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(xmemBuffer[1], HEX);
-		if (xmemBuffer[2] < 0x10) _debugPort->print(F("0"));
-		_debugPort->println(xmemBuffer[2], HEX);
-
-		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-	}
-*/
 	// Upload ARTIC firmware: YMEM
 	if (_printDebug == true)
 		_debugPort->println(F("begin: uploading ARTIC firmware to YMEM..."));
 
-	burstmode; // Prepare the burstmode register configuration
+	// Prepare the burstmode register configuration
 	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
 	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 0; // Start at address 0
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_WRITE_BURST;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_Y_MEMORY;
 	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
-/*
-	if (_printDebug == true)
-	{
-		_debugPort->print(F("begin: burstmode.BURSTMODE_REGISTER is 0x"));
-		_debugPort->println(burstmode.BURSTMODE_REGISTER, HEX);
-	}
-*/
 	configureBurstmodeRegister(burstmode); // Configure the burstmode register
 
 	delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
@@ -442,13 +326,7 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 		_spiPort->transfer(word >> 16);
 		_spiPort->transfer(word >> 8);
 		_spiPort->transfer(word & 0xFF);
-/*
-		if ((_printDebug == true) && (addr == 600))
-		{
-			_debugPort->print(F("begin: value being written to YMEM address 600 is 0x"));
-			_debugPort->println(word, HEX);
-		}
-*/
+
 		// Delay between words
 		delayMicroseconds(ARTIC_R2_BURST_INTER_WORD_DELAY_US);
 
@@ -461,37 +339,7 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 	_spiPort->endTransaction();
 
 	delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-/*
-	// Sanity check: read back the 32-bit word from YMEM address 600 to see if it was written correctly
-	if (_printDebug == true)
-	{
-		burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
-		burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = 600;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_Y_MEMORY;
-		burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
 
-		configureBurstmodeRegister(burstmode); // Configure the burstmode register
-
-		delayMicroseconds(_delay24cycles);
-
-		uint8_t ymemBuffer[3]; // Buffer for the YMEM data
-		uint8_t *ptr = ymemBuffer; // Pointer to the buffer
-
-		readMultipleWords(ptr, 24, 1); // Read exactly 1 24-bit word
-
-		_debugPort->print(F("begin: YMEM address 600 contains 0x"));
-		if (ymemBuffer[0] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(ymemBuffer[0], HEX);
-		if (ymemBuffer[1] < 0x10) _debugPort->print(F("0"));
-		_debugPort->print(ymemBuffer[1], HEX);
-		if (ymemBuffer[2] < 0x10) _debugPort->print(F("0"));
-		_debugPort->println(ymemBuffer[2], HEX);
-
-		delay(ARTIC_R2_BURST_FINISH_DELAY_MS); // Wait
-	}
-*/
 	// Activate the DSP
 	if (_printDebug == true)
 		_debugPort->println(F("begin: activating the DSP (writing 0 to the DSP control register)..."));
@@ -511,7 +359,7 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 
 	unsigned long bootStartTime = millis();
 
-	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT_MS) && (digitalRead(_int1) == LOW))
+	while (((millis() - bootStartTime) < ARTIC_R2_BOOT_TIMEOUT_MS) && (getINT1() == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: waiting for the ARTIC to boot (checking if INT1 has gone high)..."));
@@ -552,6 +400,9 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 		}
 	}
 
+	// From v1.1.0: Platform ID is stored in the final PMEM location
+	_platformID = readPlatformID();
+
 	// Read the checksum words
 	uint32_t PMEM_CRC, XMEM_CRC, YMEM_CRC;
 	readMemoryCRC(&PMEM_CRC, &XMEM_CRC, &YMEM_CRC);
@@ -576,7 +427,8 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 	delay(ARTIC_R2_BOOT_DELAY_MS);
 	unsigned long bootStartTime = millis();
 
-	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT_MS) && (digitalRead(_int1) == LOW))
+	while (((millis() - bootStartTime) < ARTIC_R2_FLASH_BOOT_TIMEOUT_MS)
+			&& (getINT1() == LOW))
 	{
 		if (_printDebug == true)
 			_debugPort->println(F("begin: ARTIC is booting from flash (waiting for INT1 to go high)..."));
@@ -615,6 +467,9 @@ boolean ARTIC_R2::beginInternal(boolean IOTA, int user_CSPin, int user_RSTPin, i
 		printFirmwareStatus(status, *_debugPort); // Pretty-print the firmware status
 	}
 
+	// From v1.1.0: Platform ID is stored in the final PMEM location
+	_platformID = readPlatformID();
+
 	return (true);
 
 #endif
@@ -632,27 +487,46 @@ void ARTIC_R2::enableDebugging(Stream &debugPort)
 //Returns true if the gain pin has been defined
 boolean ARTIC_R2::attenuateTXgain(boolean attenuate)
 {
-	if (_gain8 >= 0) // Has the G8 pin been defined?
+	if (_board < ARTIC_R2_BOARD_SMOL)
 	{
-		if (attenuate == true)
+		if (_gain8 >= 0) // Has the G8 pin been defined?
 		{
-			digitalWrite(_gain8, LOW);
-			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation enabled. Gain reduced by approx. 5dB"));
+			pinMode(_gain8, OUTPUT);
+			if (attenuate == true)
+			{
+				digitalWrite(_gain8, LOW);
+				if (_printDebug == true)
+					_debugPort->println(F("attenuateTXgain: attenuation enabled. Transmitting at reduced gain"));
+			}
+			else
+			{
+				digitalWrite(_gain8, HIGH);
+				if (_printDebug == true)
+					_debugPort->println(F("attenuateTXgain: attenuation disabled. Transmitting at full power"));
+			}
+			return (true);
 		}
 		else
 		{
-			digitalWrite(_gain8, HIGH);
 			if (_printDebug == true)
-				_debugPort->println(F("attenuateTXgain: attenuation disabled. Transmitting at full power"));
+				_debugPort->println(F("attenuateTXgain: _gain8 pin is not defined! Unable to attenuate the gain!"));
+			return (false);
 		}
-		return (true);
 	}
 	else
 	{
+		// On smôl, the G8 pin is low by default which attenuates the gain
+		// If attenuate is false, the pin is pulled high
+		setSmolG8(attenuate ? LOW : HIGH);
 		if (_printDebug == true)
-			_debugPort->println(F("attenuateTXgain: _gain8 pin is not defined! Unable to attenuate the gain!"));
-		return (false);
+		{
+			_debugPort->print(F("attenuateTXgain: attenuation "));
+			if (attenuate)
+				_debugPort->println(F("enabled. Transmitting at reduced gain"));
+			else
+				_debugPort->println(F("disabled. Transmitting at full power"));
+		}
+		return (true);
 	}
 }
 
@@ -669,17 +543,27 @@ void ARTIC_R2::disableARTICpower()
 }
 
 // Enable power for the RF amplifier
-void ARTIC_R2::enableRFpower()
+boolean ARTIC_R2::enableRFpower()
 {
 	if (_rf_pwr_en >= 0)
-		digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Breakout
+	{
+		pinMode(_rf_pwr_en, OUTPUT);
+		digitalWrite(_rf_pwr_en, HIGH); // SparkFun ARTIC R2 Shield
+		return (true);
+	}
+	return (false);
 }
 
 // Disable power for the RF amplifier
-void ARTIC_R2::disableRFpower()
+boolean ARTIC_R2::disableRFpower()
 {
 	if (_rf_pwr_en >= 0)
-		digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Breakout
+	{
+		pinMode(_rf_pwr_en, OUTPUT);
+		digitalWrite(_rf_pwr_en, LOW); // SparkFun ARTIC R2 Shield
+		return (true);
+	}
+	return (false);
 }
 
 // Read ARTIC R2 firmware status register
@@ -1635,6 +1519,38 @@ void ARTIC_R2::readFirmwareVersion(char *buffer)
 		_debugPort->print(F("readFirmwareVersion: firmware version: "));
 		_debugPort->println(buffer);
 	}
+}
+
+// Read and return the Platform ID from PMEM
+uint32_t ARTIC_R2::readPlatformID()
+{
+	uint8_t buffer[4]; // buffer to store the Platform ID
+
+	ARTIC_R2_Burstmode_Register burstmode; // Prepare the burstmode register configuration
+	burstmode.BURSTMODE_REGISTER = 0x00000000; // Clear all unused bits
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_REG_SPI_ADDR = ARTIC_R2_BURSTMODE_REG_WRITE;
+	burstmode.BURSTMODE_REGISTER_BITS.BURSTMODE_START_ADDR = MEM_LOC_PLATFORM_ID;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_R_RW_MODE = ARTIC_R2_READ_BURST;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MEM_SEL = ARTIC_R2_P_MEMORY;
+	burstmode.BURSTMODE_REGISTER_BITS.BURST_MODE_ON = 1;
+
+	configureBurstmodeRegister(burstmode); // Configure the burstmode register
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles
+
+	readMultipleWords(buffer, 32, 1); // Read 1 * 32-bit word
+
+	delayMicroseconds(_delay24cycles); // Wait for 24 clock cycles - just in case we need to do another burst mode transfer straight away
+
+	uint32_t platformID = ((((uint32_t)buffer[0]) << 24) | (((uint32_t)buffer[1]) << 16) | (((uint32_t)buffer[2]) << 8) | (((uint32_t)buffer[3]) << 0));
+
+	if (_printDebug == true)
+	{
+		_debugPort->print(F("readPlatformID: Platform ID: 0x"));
+		_debugPort->println(platformID, HEX);
+	}
+
+	return (platformID);
 }
 
 // Read the memories CRCs (after firmware boot)
@@ -2755,7 +2671,8 @@ boolean ARTIC_R2::readDownlinkMessage(Downlink_Message *downlinkMessage)
 // Set the Tx payload for a ARGOS 3 ZE message
 // The payload contains _only_ the 28-bit platform ID (left justified) plus 8 tail bits (0x00)
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS3ZE()
 {
 	// Tx length in bits
 	// For PTT-ZE messages, the total message length is the sum of:
@@ -2766,10 +2683,10 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 	_txPayloadBytes[2] = ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_ZE_NUM_TAIL_BITS;
 
 	// The payload
-	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus 4 tail bits
+	_txPayloadBytes[3] = (_platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (_platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus 4 tail bits
 	_txPayloadBytes[7] = 0x00; // Remaining 4 tail bits plus four stuff bits
 	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
@@ -2795,7 +2712,8 @@ boolean ARTIC_R2::setPayloadARGOS3ZE(uint32_t platformID)
 // Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float Lon)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS3LatLon(float Lat, float Lon)
 {
 	// Tx length in bits
 	// For PTT-A3 messages, the total message length is the sum of:
@@ -2808,10 +2726,10 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + 56 + ARTIC_R2_PTT_A3_NUM_TAIL_BITS_56;
 
 	// The payload itself
-	_txPayloadBytes[3] = (ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
-	_txPayloadBytes[6] = platformID & 0xFF;
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A3_MESSAGE_LENGTH_56 << 4) | ((_platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = _platformID & 0xFF;
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -2862,7 +2780,8 @@ boolean ARTIC_R2::setPayloadARGOS3LatLon(uint32_t platformID, float Lat, float L
 //   The 8 most-significant bits of the first payload uint32_t are ignored.
 //   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS3(uint8_t Nx32_bits, uint32_t *payload)
 {
 	// Tx length in bits
 	// For PTT-A3 messages, the total message length is the sum of:
@@ -2918,10 +2837,10 @@ boolean ARTIC_R2::setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint3
 	else if (Nx32_bits == 7) _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_216 << 4;
 	else _txPayloadBytes[3] = ARTIC_R2_PTT_A3_MESSAGE_LENGTH_248 << 4;
 
-	_txPayloadBytes[3] |= (platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
-	_txPayloadBytes[6] = platformID & 0xFF;
+	_txPayloadBytes[3] |= (_platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = _platformID & 0xFF;
 
 	// The user data
 	uint32_t userData = *payload; // Get the first user data word
@@ -2978,7 +2897,8 @@ boolean ARTIC_R2::setPayloadARGOS3(uint32_t platformID, uint8_t Nx32_bits, uint3
 // Lat is encoded as 21 bits: the MSB is 0 for +ve latitude, 1 for -ve latitude (SOUTH); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float Lon)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS2LatLon(float Lat, float Lon)
 {
 	// Tx length in bits
 	// For PTT-A2 messages, the total message length is the sum of:
@@ -2992,10 +2912,10 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_BITS + ARTIC_R2_PLATFORM_ID_BITS + ARTIC_R2_PTT_A2_USER_BITS_N_2;
 
 	// The payload itself
-	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
-	_txPayloadBytes[6] = platformID & 0xFF;
+	_txPayloadBytes[3] = (ARTIC_R2_PTT_A2_MESSAGE_LENGTH_56 << 4) | ((_platformID >> 24) & 0x0F); // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = _platformID & 0xFF;
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -3045,7 +2965,8 @@ boolean ARTIC_R2::setPayloadARGOS2LatLon(uint32_t platformID, float Lat, float L
 //   The 8 most-significant bits of the first payload uint32_t are ignored.
 //   All 32 bits of the second and subsequent payload uint32_t's are included in the message.
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint32_t *payload)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS2(uint8_t Nx32_bits, uint32_t *payload)
 {
 	// Tx length in bits
 	// For PTT-A2 messages, the total message length is the sum of:
@@ -3092,10 +3013,10 @@ boolean ARTIC_R2::setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint3
 	else if (Nx32_bits == 7) _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_216 << 4;
 	else _txPayloadBytes[3] = ARTIC_R2_PTT_A2_MESSAGE_LENGTH_248 << 4;
 
-	_txPayloadBytes[3] |= (platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 16) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 8) & 0xFF;
-	_txPayloadBytes[6] = platformID & 0xFF;
+	_txPayloadBytes[3] |= (_platformID >> 24) & 0x0F; // Message length and the first 4 bits of the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 16) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 8) & 0xFF;
+	_txPayloadBytes[6] = _platformID & 0xFF;
 
 	// The user data
 	uint32_t userData = *payload; // Get the first user data word
@@ -3141,7 +3062,8 @@ boolean ARTIC_R2::setPayloadARGOS2(uint32_t platformID, uint8_t Nx32_bits, uint3
 // The payload contains the 28-bit platform ID (left justified) plus 6 tail bits
 // The ARTIC adds the two message length bits after the sync pattern
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS4VLDshort()
 {
 	// Tx length in bits
 	_txPayloadBytes[0] = 0x00;
@@ -3149,10 +3071,10 @@ boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_SHORT_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	_txPayloadBytes[3] = ((platformID >> 20) & 0xFF); // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[3] = ((_platformID >> 20) & 0xFF); // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (_platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
 	_txPayloadBytes[7] = 0x00; // Last two tail bits plus six stuff bits
 	_txPayloadBytes[8] = 0x00; // Stuff buffer with zeros to a multiple of 24 bits (ARTIC requires this)
 
@@ -3179,7 +3101,8 @@ boolean ARTIC_R2::setPayloadARGOS4VLDshort(uint32_t platformID)
 // Lon is encoded as 22 bits: the MSB is 0 for +ve longitude, 1 for -ve longitude (WEST); the unit is 0.0001 degrees. (Note: this is not two's complement!)
 // The ARTIC adds the two message length bits after the sync pattern
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, float Lon)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(float Lat, float Lon)
 {
 	// Tx length in bits
 	_txPayloadBytes[0] = 0x00;
@@ -3187,10 +3110,10 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[3] = (_platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (_platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
 
 	boolean negative = false;
 	if (Lat < 0.0)
@@ -3238,7 +3161,8 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLatLon(uint32_t platformID, float Lat, floa
 
 // Set the Tx payload for a ARGOS 4 VLD Long message containing two 28-bit payload words
 // Returns true if the payload was set successfully
-boolean ARTIC_R2::setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1, uint32_t payload2)
+// From v1.1.0: use the _platformID read from PMEM
+boolean ARTIC_R2::setPayloadARGOS4VLDLong(uint32_t payload1, uint32_t payload2)
 {
 	// Tx length in bits
 	_txPayloadBytes[0] = 0x00;
@@ -3246,10 +3170,10 @@ boolean ARTIC_R2::setPayloadARGOS4VLDLong(uint32_t platformID, uint32_t payload1
 	_txPayloadBytes[2] = ARTIC_R2_PTT_A4_VLD_LONG_NUM_MESSAGE_BITS;
 
 	// The payload itself
-	_txPayloadBytes[3] = (platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
-	_txPayloadBytes[4] = (platformID >> 12) & 0xFF;
-	_txPayloadBytes[5] = (platformID >> 4) & 0xFF;
-	_txPayloadBytes[6] = (platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
+	_txPayloadBytes[3] = (_platformID >> 20) & 0xFF; // Left justify the 28-bit platform ID
+	_txPayloadBytes[4] = (_platformID >> 12) & 0xFF;
+	_txPayloadBytes[5] = (_platformID >> 4) & 0xFF;
+	_txPayloadBytes[6] = (_platformID << 4) & 0xF0; // Last 4 bits of the platform ID plus four tail bits
 
 	_txPayloadBytes[7] = (payload1 >> 22) & 0x3F; // Two tail bits plus 6 bits of payload1
 	_txPayloadBytes[8] = (payload1 >> 14) & 0xFF; // Load 8 bits of payload1 into the payload
@@ -4364,4 +4288,152 @@ boolean ARTIC_R2::printAOPbulletin(bulletin_data_t bulletin, Stream &port)
 		return true;
 	else
 		return false;
+}
+
+boolean ARTIC_R2::beginPCA9536()
+{
+	// PCA9536 GPIO0 = RESETB (Output)
+	// PCA9536 GPIO1 = INT1 (Input)
+	// PCA9536 GPIO2 = BOOT (Output)
+	// PCA9536 GPIO3 = G8 (Output)
+
+	boolean result = true;
+
+	// Get ready to pull the G8 pin low when it is changed to an output
+	result &= setSmolG8(LOW);
+
+	// Read
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_CONFIGURATION_REGISTER);
+	result &= (_i2cPort->endTransmission(false) == 0); // Restart
+
+    uint8_t bytesReturned = _i2cPort->requestFrom(SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
+    if (bytesReturned != 1)
+        return (false);
+    uint8_t incomingByte = _i2cPort->read();
+
+	// Modify
+	incomingByte |= 0x02; // Configure GPIO1 as an input for INT1
+	incomingByte &= ~(0x0D); // Configure GPIO0/2/3 as outputs
+
+	// Write
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_CONFIGURATION_REGISTER);
+	_i2cPort->write(incomingByte);
+	result &= (_i2cPort->endTransmission() == 0); // Stop
+
+	return (result);
+}
+
+boolean ARTIC_R2::setSmolG8(uint8_t highLow)
+{
+	return (setPCA9536Output(highLow, 3));
+}
+
+boolean ARTIC_R2::setSmolBOOT(uint8_t highLow)
+{
+	return (setPCA9536Output(highLow, 2));
+}
+
+boolean ARTIC_R2::setSmolRESETB(uint8_t highLow)
+{
+	return (setPCA9536Output(highLow, 0));
+}
+
+boolean ARTIC_R2::setPCA9536Output(uint8_t highLow, uint8_t theGPIOpin)
+{
+	boolean result = true;
+
+	// Read
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_OUTPUT_PORT);
+	result &= (_i2cPort->endTransmission(false) == 0); // Restart
+
+    uint8_t bytesReturned = _i2cPort->requestFrom(SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
+    if (bytesReturned != 1)
+        return (false);
+    uint8_t incomingByte = _i2cPort->read();
+
+	// Modify
+	if (highLow)
+		incomingByte |= (1 << theGPIOpin);
+	else
+		incomingByte &= ~(1 << theGPIOpin);
+
+	// Write
+	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write(SMOL_PCA9536_OUTPUT_PORT);
+	_i2cPort->write(incomingByte);
+	result &= (_i2cPort->endTransmission() == 0); // Stop
+
+	return (result);
+}
+
+uint8_t ARTIC_R2::getSmolINT1()
+{
+	_i2cPort->beginTransmission((uint8_t)SMOL_PCA9536_I2C_ADDRESS);
+	_i2cPort->write((uint8_t)SMOL_PCA9536_INPUT_PORT);
+	if (_i2cPort->endTransmission(false) != 0) // Restart
+		return (LOW); // I2C Error - show INT1 as low
+
+    uint8_t bytesReturned = _i2cPort->requestFrom((uint8_t)SMOL_PCA9536_I2C_ADDRESS, (uint8_t)1);
+    if (bytesReturned != 1)
+        return (LOW); // I2C Error - show INT1 as low
+    uint8_t incomingByte = _i2cPort->read();
+
+	return ((incomingByte & 0x02) >> 1);
+}
+
+// The ARTIC will boot from the [onboard] external flash memory when the boot pin is high and reset is released.
+// If the boot pin is held low at reset the ARTIC will wait for the MCU to upload the Firmware.
+boolean ARTIC_R2::configureBootPin()
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+	{
+		if (_boot >= 0)
+		{
+			pinMode(_boot, OUTPUT);
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+			digitalWrite(_boot, LOW); // Get ready to upload the firmware
+#else
+			digitalWrite(_boot, HIGH); // Boot the ARTIC from flash memory
+#endif
+			return (true);
+		}
+		return (false);
+	}
+	else // smôl
+	{
+#ifdef ARTIC_R2_UPLOAD_FIRMWARE
+			return (setSmolBOOT(LOW)); // Get ready to upload the firmware
+#else
+			return (setSmolBOOT(HIGH)); // Boot the ARTIC from flash memory
+#endif
+	}
+}
+
+boolean ARTIC_R2::setRESETBPin(uint8_t highLow)
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+	{
+		if (_rst >= 0)
+		{
+			pinMode(_rst, OUTPUT);
+			digitalWrite(_rst, highLow);
+			return (true);
+		}
+		return (false);
+	}
+	else
+	{
+		return (setSmolRESETB(highLow));
+	}
+}
+
+uint8_t ARTIC_R2::getINT1()
+{
+	if (_board < ARTIC_R2_BOARD_SMOL)
+		return (digitalRead(_int1));
+	else
+		return (getSmolINT1());
 }
