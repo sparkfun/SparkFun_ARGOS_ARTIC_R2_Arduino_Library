@@ -728,7 +728,7 @@ private:
 	boolean setSmolBOOT(uint8_t highLow);   // BOOT   = PCA9536 GPIO2
 	uint8_t getSmolINT1();               // INT1   = PCA9536 GPIO1
 	boolean setSmolRESETB(uint8_t highLow); // RESETB = PCA9536 GPIO0
-	boolean setPCA9536Output(uint8_t highLow, uint8_t GPIO);
+	boolean setPCA9536Output(uint8_t highLow, uint8_t theGPIOpin);
 
 	// GPIO helper functions
 	boolean configureBootPin();

@@ -4340,7 +4340,7 @@ boolean ARTIC_R2::setSmolRESETB(uint8_t highLow)
 	return (setPCA9536Output(highLow, 0));
 }
 
-boolean ARTIC_R2::setPCA9536Output(uint8_t highLow, uint8_t GPIO)
+boolean ARTIC_R2::setPCA9536Output(uint8_t highLow, uint8_t theGPIOpin)
 {
 	boolean result = true;
 
@@ -4356,9 +4356,9 @@ boolean ARTIC_R2::setPCA9536Output(uint8_t highLow, uint8_t GPIO)
 
 	// Modify
 	if (highLow)
-		incomingByte |= (1 << GPIO);
+		incomingByte |= (1 << theGPIOpin);
 	else
-		incomingByte &= ~(1 << GPIO);
+		incomingByte &= ~(1 << theGPIOpin);
 
 	// Write
 	_i2cPort->beginTransmission(SMOL_PCA9536_I2C_ADDRESS);
