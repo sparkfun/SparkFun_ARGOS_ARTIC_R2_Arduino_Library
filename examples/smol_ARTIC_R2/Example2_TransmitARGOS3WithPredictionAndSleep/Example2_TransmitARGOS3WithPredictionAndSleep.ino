@@ -105,7 +105,7 @@ const uint8_t numARGOSsatellites = 8; // Change this if required to match the nu
 // Copy and paste the latest AOP from ARGOS Web between the quotes and then carefully delete the line feeds
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04 MA A 5 3 0 2020 10 17 23 17 28  7195.659  98.5078  318.195  -25.342  101.3611   0.00 MB 9 3 0 0 2020 10 17 22 50 39  7195.586  98.7164  339.849  -25.339  101.3590   0.00 MC B 7 3 0 2020 10 17 22  3  0  7195.670  98.7232  352.079  -25.340  101.3608   0.00 15 5 0 0 0 2020 10 17 22 41 11  7180.481  98.7069  309.136  -25.259  101.0405  -0.11 18 8 0 0 0 2020 10 17 22  2 34  7226.005  99.0303  351.904  -25.498  102.0006  -0.80 19 C 6 0 0 2020 10 17 22 20 53  7226.397  99.1943  298.377  -25.499  102.0084  -0.51 SR D 4 3 0 2020 10 17 22 34 12  7160.232  98.5409  110.208  -25.154  100.6145  -0.12";
-const char AOP[] =      " A1 6 0 0 1 2021  7 30 22 35  3  6890.719  97.4674  107.283  -23.750   94.9993  -3.10 MA A 5 3 0 2021  7 30 22 59 29  7195.508  98.4675  315.815  -25.341  101.3580   0.00 MB 9 3 0 0 2021  7 30 22 34  2  7195.620  98.7126  344.171  -25.340  101.3597   0.00 MC B 7 3 0 2021  7 30 23 27  9  7195.563  98.6827  331.038  -25.340  101.3586   0.00 15 5 0 0 0 2021  7 30 22 31  2  7180.277  98.6783  313.531  -25.259  101.0363  -1.45 18 8 0 0 0 2021  7 30 22 27  4  7225.691  98.9922  351.423  -25.497  101.9940  -0.92 19 C 6 0 0 2021  7 30 23 22  2  7226.181  99.1814  294.431  -25.498  102.0039  -0.84 SR D 4 3 0 2021  7 30 22  3 19  7160.122  98.5451  117.722  -25.153  100.6122  -0.23";
+const char AOP[] =      " A1 6 0 0 1 2021 10 22 22  4 22  6890.361  97.4669  114.927  -23.748   94.9919  -4.55 MA A 5 3 0 2021 10 22 22 19 59  7195.503  98.4587  323.467  -25.341  101.3580   0.00 MB 9 3 0 0 2021 10 22 21 55 40  7195.600  98.7004  353.821  -25.340  101.3593   0.00 MC B 7 3 0 2021 10 22 22 48 12  7195.606  98.7207  340.689  -25.340  101.3594   0.00 15 5 0 0 0 2021 10 22 22  9 58  7180.144  98.6715  319.198  -25.258  101.0335  -0.65 18 8 0 0 0 2021 10 22 20 49 30  7225.632  98.9820   17.278  -25.497  101.9928  -0.94 19 C 6 0 0 2021 10 22 21 56 16  7226.119  99.1755  319.119  -25.498  102.0026  -0.66 SR D 4 3 0 2021 10 22 23 19 35  7160.106  98.5431   98.627  -25.153  100.6119  -0.28";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
@@ -125,8 +125,8 @@ ARTIC_R2 myARTIC;
 SFE_UBLOX_GNSS myGNSS;
 
 #include "SparkFun_smol_Power_Board.h" // Click here to get the library: http://librarymanager/All#SparkFun_smol_Power_Board
-smolPowerAAA myPowerBoard; // Uncomment this line to use the smôl Power Board AAA
-//smolPowerLiPo myPowerBoard; // Uncomment this line to use the smôl Power Board LiPo
+//smolPowerAAA myPowerBoard; // Uncomment this line to use the smôl Power Board AAA
+smolPowerLiPo myPowerBoard; // Uncomment this line to use the smôl Power Board LiPo
 
 // Pin assignments for the smôl stack-up described above
 int CS_Pin = 5;            // smôl CS0 = ESP32 Pin 5
