@@ -480,6 +480,7 @@ void loop()
       {
         digitalWrite(ARTIC_PWR_EN_Pin, LOW); // Disable power for the ARTIC
         Serial.println(F("ARTIC power has been turned off"));
+        SPI.end();
         pinMode(esp32COPI, INPUT); // Make COPI an input so it cannot source power
         pinMode(esp32SCLK, INPUT); // Make SCLK an input so it cannot source power
         articIsOn = false;
