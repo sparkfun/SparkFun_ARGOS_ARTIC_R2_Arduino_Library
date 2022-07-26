@@ -26,6 +26,16 @@
 
 #include "SparkFun_ARGOS_ARTIC_R2_Arduino_Library.h"
 
+ARTIC_R2::ARTIC_R2(void)
+{
+	_dateTimeStorage = new char[dateTimeMaxLength];
+}
+
+ARTIC_R2::~ARTIC_R2(void)
+{
+	delete[] _dateTimeStorage;
+}
+
 boolean ARTIC_R2::begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin, unsigned long spiPortSpeed, SPIClass &spiPort)
 {
 	_board = ARTIC_R2_BOARD_SHIELD;
@@ -1023,8 +1033,7 @@ ARTIC_R2_MCU_Command_Result ARTIC_R2::sendHousekeepingCommand(uint8_t command)
 		(command != CMD_CLEAR_INT_2))
 		return ARTIC_R2_MCU_COMMAND_INVALID; // Command is invalid
 
-	ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
-
+	// ARTIC_R2_Firmware_Status status; // Read the status register before attempting to send the command
 	// if (_printDebug == true)
 	// {
 	// 	readStatusRegister(&status);
@@ -3882,6 +3891,11 @@ int ARTIC_R2::satellitePassPrediction(configurationParameters * p_pc, orbitParam
 
     } /* lecture de chaque bulletin de satellite */
 
+
+	(void)t0;
+	(void)d2_mem_mem;
+	(void)v_differe;
+	
     return 0;
 }
 
@@ -4182,23 +4196,21 @@ float ARTIC_R2::textToFloat(const char *ptr, uint8_t digitsBeforeDP, uint8_t dig
 }
 
 // Convert epoch to date & time string
-char* const ARTIC_R2::convertEpochToDateTime(uint32_t epoch)
+char* ARTIC_R2::convertEpochToDateTime(uint32_t epoch)
 {
-	static char dateTime[20]; // Storage for the date & time
 	time_t pt_of_day = epoch; // Convert to YY/MM/DD HH:MM:SS
 	tm* pt = gmtime(&pt_of_day);
-	sprintf(dateTime, "%02d/%02d/%04d %02d:%02d:%02d", pt->tm_mday, pt->tm_mon + 1, pt->tm_year + 1900, pt->tm_hour, pt->tm_min, pt->tm_sec);
-	return dateTime;
+	sprintf(_dateTimeStorage, "%02d/%02d/%04d %02d:%02d:%02d", pt->tm_mday, pt->tm_mon + 1, pt->tm_year + 1900, pt->tm_hour, pt->tm_min, pt->tm_sec);
+	return (_dateTimeStorage);
 }
 
 // Convert epoch to AOP format date & time string
-char* const ARTIC_R2::convertEpochToDateTimeAOP(uint32_t epoch)
+char* ARTIC_R2::convertEpochToDateTimeAOP(uint32_t epoch)
 {
-	static char dateTime[20]; // Storage for the date & time
 	time_t pt_of_day = epoch; // Convert to YY/MM/DD HH:MM:SS
 	tm* pt = gmtime(&pt_of_day);
-	sprintf(dateTime, "%4d %2d %2d %2d %2d %2d", pt->tm_year + 1900, pt->tm_mon + 1, pt->tm_mday, pt->tm_hour, pt->tm_min, pt->tm_sec);
-	return dateTime;
+	sprintf(_dateTimeStorage, "%4d %2d %2d %2d %2d %2d", pt->tm_year + 1900, pt->tm_mon + 1, pt->tm_mday, pt->tm_hour, pt->tm_min, pt->tm_sec);
+	return (_dateTimeStorage);
 }
 
 // Convert GPS date & time to epoch

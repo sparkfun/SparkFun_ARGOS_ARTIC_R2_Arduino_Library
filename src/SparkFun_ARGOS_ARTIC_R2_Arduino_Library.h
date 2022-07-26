@@ -526,6 +526,9 @@ const int TIME_CONVERTOR = 631152000; /* Change apoch from 1990 to 1970 */
 class ARTIC_R2
 {
 public:
+	ARTIC_R2(void); // Constructor
+	~ARTIC_R2(void); // Destructor
+
 	// The maximum SPI clock speed for ARTIC read operations from the X/Y/IO memory is 1.25MHz, so let's play safe and default to 1MHz
 	boolean begin(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_ARTICPWRENPin, int user_RFPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
 	boolean beginIOTA(int user_CSPin, int user_RSTPin, int user_BOOTPin, int user_IOTAPWRENPin, int user_INT1Pin, int user_INT2Pin, int user_GAIN8Pin = -1, unsigned long spiPortSpeed = 1000000, SPIClass &spiPort = SPI);
@@ -644,8 +647,8 @@ public:
 
 	// Satellite pass prediciton helper tools
 	boolean convertAOPtoParameters(const char *AOP, bulletin_data_t *satelliteParameters, const uint8_t number_sat); // Convert the AOP from text to bulletin_data_t
-	char* const convertEpochToDateTime(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string
-	char* const convertEpochToDateTimeAOP(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string in AOP format
+	char* convertEpochToDateTime(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string
+	char* convertEpochToDateTimeAOP(uint32_t epoch); // Convert the epoch from the satellite predictor to a date & time string in AOP format
 	uint32_t convertGPSTimeToEpoch(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t minute, uint8_t second); // Convert GPS date & time to epoch
 	boolean printAOPbulletin(bulletin_data_t bulletin, Stream &port = Serial); // Pretty-print the AOP bulletin
 	uint32_t convertAllcastDateTimeToEpoch(const char *DateTime); // Convert the Allcast JSON Date Time to Epoch
@@ -733,6 +736,10 @@ private:
 	// GPIO helper functions
 	boolean configureBootPin();
 	boolean setRESETBPin(uint8_t highLow);
+
+	// DateTime storage
+	#define dateTimeMaxLength 73 // ESP32 v2.0.4 compiler says 72 bytes
+	char *_dateTimeStorage;
 };
 
 #endif
