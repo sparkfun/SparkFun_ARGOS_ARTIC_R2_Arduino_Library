@@ -90,7 +90,7 @@ const uint8_t numARGOSsatellites = 1; // Change this if required to match the nu
 // Check the alignment afterwards - make sure that the satellite identifiers still line up correctly (or convertAOPtoParameters will go horribly wrong!)
 // At the time of writing, only ANGELS A1 supports ARGOS-4
 // Check the alignment: " A1 6 0 0 1 2020 10 17 23 45 54  6891.715  97.4600   89.939  -23.755   95.0198  -2.04";
-const char AOP[] =      " A1 6 0 0 1 2022  7 25 23  4 12  6886.753  97.4720  100.183  -23.729   94.9174 -15.13";
+const char AOP[] =      " A1 6 0 0 1 2022 11 18 22 45 14  6884.570  97.4713  105.252  -23.718   94.8723 -22.60";
 
 // Minimum satellite elevation (above the horizon):
 //  Set this to 5 to 20 degrees if you have a clear view to the horizon.
